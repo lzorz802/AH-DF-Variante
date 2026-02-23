@@ -19,11 +19,7 @@ const ReportCard = ({ report }: ReportCardProps) => {
 
   return (
     <div
-      className={`group relative bg-card rounded-xl card-shadow transition-all duration-200 overflow-hidden border-2 ${
-        isFeatured
-          ? "border-dashed border-primary/40"
-          : "border-transparent hover:border-dashed hover:border-primary/30"
-      } hover:card-shadow-hover hover:scale-[1.02]`}
+      className={`group relative bg-card rounded-xl card-shadow transition-all duration-200 overflow-hidden border-2 border-transparent hover:border-dashed hover:border-primary/30 hover:card-shadow-hover hover:scale-[1.02]`}
     >
       <div className="p-5">
         {/* Header */}
