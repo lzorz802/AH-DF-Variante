@@ -31,7 +31,7 @@ const ReportCard = ({ report }: ReportCardProps) => {
             <img
               src={report.id === "5" ? speckleIcon : powerBiIcon}
               alt={report.id === "5" ? "BIM" : "Power BI"}
-              className="h-7 w-7"
+              className={report.id === "5" ? "h-10 w-10" : "h-7 w-7"}
             />
           </button>
         </div>
