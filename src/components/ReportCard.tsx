@@ -1,7 +1,8 @@
-import { ArrowRight, Zap } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import ChartIllustration, { type ChartType } from "./ChartIllustration";
 import type { Report } from "@/data/reports";
+import powerBiIcon from "@/assets/power-bi-icon.png";
 
 const chartTypeMap: Record<string, ChartType> = {
   "1": "line",
@@ -26,7 +27,7 @@ const ReportCard = ({ report }: ReportCardProps) => {
         <div className="flex items-start justify-between mb-3">
           <h3 className="text-sm font-semibold text-foreground pr-2 leading-snug">{report.title}</h3>
           <button className="shrink-0 h-8 w-8 rounded-lg bg-accent flex items-center justify-center">
-            <Zap className="h-4 w-4 text-accent-foreground" />
+            <img src={powerBiIcon} alt="Power BI" className="h-5 w-5" />
           </button>
         </div>
 
