@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import ChartIllustration, { type ChartType } from "./ChartIllustration";
 import type { Report } from "@/data/reports";
 import powerBiIcon from "@/assets/power-bi-icon.png";
+import speckleIcon from "@/assets/speckle-icon.png";
 
 const chartTypeMap: Record<string, ChartType> = {
   "1": "line",
@@ -27,7 +28,11 @@ const ReportCard = ({ report }: ReportCardProps) => {
         <div className="flex items-start justify-between mb-3">
           <h3 className="text-sm font-semibold text-foreground pr-2 leading-snug">{report.title}</h3>
           <button className="shrink-0 h-8 w-8 flex items-center justify-center">
-            <img src={powerBiIcon} alt="Power BI" className="h-7 w-7" />
+            <img
+              src={report.id === "5" ? speckleIcon : powerBiIcon}
+              alt={report.id === "5" ? "BIM" : "Power BI"}
+              className="h-7 w-7"
+            />
           </button>
         </div>
 
@@ -45,7 +50,7 @@ const ReportCard = ({ report }: ReportCardProps) => {
             to={`/report/${report.id}`}
             className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
           >
-            Open Report
+            {report.id === "5" ? "View File" : "Open Report"}
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
