@@ -43,27 +43,15 @@ const ReportCard = ({ report }: ReportCardProps) => {
 
         {/* CTA */}
         <div className="flex justify-end">
-          {isFeatured ? (
-            <a
-              href={report.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-            >
-              Open Report
-              <ArrowRight className="h-4 w-4" />
-            </a>
-          ) : (
-            <a
-              href={report.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline transition-colors"
-            >
-              Open Report
-              <ArrowRight className="h-3.5 w-3.5" />
-            </a>
-          )}
+          <a
+            href={report.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            Open Report
+            <ArrowRight className="h-4 w-4" />
+          </a>
         </div>
       </div>
     </div>
