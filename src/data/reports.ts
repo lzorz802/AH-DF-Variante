@@ -41,6 +41,13 @@ export const reports: Report[] = [
     tag: "operations",
     url: "https://app.fabric.microsoft.com/reportEmbed?reportId=baddae82-b173-4894-bec3-99c4052e2741&autoAuth=true&ctid=deff24bb-2089-4400-8c8e-f71e680378b2",
   },
+  {
+    id: "5",
+    title: "Speckle BIM Viewer",
+    description: "Visualizzazione federata del modello BIM 3D con tutti i layer disciplinari sovrapposti.",
+    tag: "operations",
+    url: "https://app.speckle.systems/projects/a0102047d4/models/all?embedToken=0c70148e6c17a7848184ee9a7947313e5359b3bf70#embed=%7B%22isEnabled%22%3Atrue%7D",
+  },
 ];
 
 export const filterTabs = [
