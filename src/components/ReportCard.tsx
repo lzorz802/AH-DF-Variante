@@ -27,7 +27,7 @@ const ReportCard = ({ report }: ReportCardProps) => {
         <div className="flex items-start justify-between mb-3">
           <h3 className="text-sm font-semibold text-foreground pr-2 leading-snug">{report.title}</h3>
           <button className="shrink-0 h-8 w-8 flex items-center justify-center">
-            <img src={powerBiIcon} alt="Power BI" className="h-5 w-5" />
+            <img src={powerBiIcon} alt="Power BI" className="h-7 w-7" />
           </button>
         </div>
 
