@@ -1,4 +1,5 @@
 import { ArrowRight, Zap } from "lucide-react";
+import { Link } from "react-router-dom";
 import ChartIllustration, { type ChartType } from "./ChartIllustration";
 import type { Report } from "@/data/reports";
 
@@ -43,15 +44,13 @@ const ReportCard = ({ report }: ReportCardProps) => {
 
         {/* CTA */}
         <div className="flex justify-end">
-          <a
-            href={report.url}
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            to={`/report/${report.id}`}
             className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
           >
             Open Report
             <ArrowRight className="h-4 w-4" />
-          </a>
+          </Link>
         </div>
       </div>
     </div>
