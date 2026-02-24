@@ -8,14 +8,63 @@ import type { BimObject } from "@/store/bimStore";
 const PROJECT_URL = "https://app.speckle.systems/projects/a0102047d4/models/all";
 const EMBED_TOKEN = "0c70148e6c17a7848184ee9a7947313e5359b3bf70";
 
+// ── Category from speckle_type (IFC / Revit / Civil) ─────────────────────────
+// Handles both Speckle native types (Objects.BuiltElements.Wall)
+// and raw IFC class names (IfcWall, IfcSlab, etc.)
+function categoryFromSpeckleType(speckleType: string): string | null {
+  if (!speckleType) return null;
+  const s = speckleType.toLowerCase();
+
+  if (s.includes("wall"))         return "Wall";
+  if (s.includes("floor") || s.includes("slab")) return "Floor";
+  if (s.includes("column"))       return "Column";
+  if (s.includes("beam") || s.includes("structuralframing") || s.includes("framing") || s.includes("member")) return "Beam";
+  if (s.includes("roof"))         return "Roof";
+  if (s.includes("window"))       return "Window";
+  if (s.includes("door"))         return "Door";
+  if (s.includes("stair"))        return "Stair";
+  if (s.includes("ceiling"))      return "Ceiling";
+  if (s.includes("furniture") || s.includes("furnishingelement")) return "Furniture";
+  if (s.includes("railing") || s.includes("handrail")) return "Railing";
+  if (s.includes("pipe") || s.includes("duct") || s.includes("mep") ||
+      s.includes("conduit") || s.includes("flowsegment") || s.includes("distributionflowelem")) return "MEP";
+  if (s.includes("site") || s.includes("terrain") || s.includes("topograph") ||
+      s.includes("geographicelement") || s.includes("earthwork")) return "Site";
+  if (s.includes("room") || s.includes("space") || s.includes("zone")) return "Room";
+  if (s.includes("road") || s.includes("bridge") || s.includes("tunnel") ||
+      s.includes("railway") || s.includes("pavement") || s.includes("alignment") ||
+      s.includes("kerb") || s.includes("lane") || s.includes("marking") ||
+      s.includes("barrier") || s.includes("carriageway")) return "Infrastructure";
+  if (s.includes("vegetation") || s.includes("tree") || s.includes("plant")) return "Vegetation";
+  if (s.includes("sign"))         return "Sign";
+  if (s.includes("opening") || s.includes("void")) return "Opening";
+  if (s.includes("covering"))     return "Ceiling"; // IfcCovering covers ceilings/floors
+  if (s.includes("footing") || s.includes("pile") || s.includes("foundation")) return "Foundation";
+  if (s.includes("plate"))        return "Beam";    // structural plate → beam macro
+  // IFC generic fallback — don't return "Other" from speckle_type alone
+  if (s.includes("element") || s.includes("builtelement") || s.includes("ifcproduct")) return null;
+
+  return null;
+}
+
+// ── Category from property bag ────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function categoryFromProperties(props: Record<string, any>): string {
+function categoryFromProperties(flat: Record<string, any>, speckleType: string): string {
+  // 1. speckle_type is most reliable for IFC models
+  const fromType = categoryFromSpeckleType(speckleType);
+  if (fromType) return fromType;
+
+  // 2. Explicit category/type properties
   const raw =
-    props["category"] ?? props["Category"] ??
-    props["ifcType"] ?? props["IfcType"] ??
-    props["type"] ?? props["Type"] ?? "";
+    flat["category"] ?? flat["Category"] ??
+    flat["ifcType"] ?? flat["IfcType"] ??
+    flat["type"] ?? flat["Type"] ?? "";
+
   if (raw && typeof raw === "string" && raw.trim()) {
     const c = raw.trim();
+    const fromProp = categoryFromSpeckleType(c);
+    if (fromProp) return fromProp;
+
     const MAP: Record<string, string> = {
       "Walls": "Wall", "Wall": "Wall",
       "Floors": "Floor", "Floor": "Floor", "Slab": "Floor",
@@ -34,32 +83,21 @@ function categoryFromProperties(props: Record<string, any>): string {
       "Generic Models": "Generic",
     };
     if (MAP[c]) return MAP[c];
-    const lower = c.toLowerCase();
-    if (lower.includes("wall")) return "Wall";
-    if (lower.includes("floor") || lower.includes("slab")) return "Floor";
-    if (lower.includes("column")) return "Column";
-    if (lower.includes("beam") || lower.includes("framing")) return "Beam";
-    if (lower.includes("roof")) return "Roof";
-    if (lower.includes("window")) return "Window";
-    if (lower.includes("door")) return "Door";
-    if (lower.includes("stair")) return "Stair";
-    if (lower.includes("ceiling")) return "Ceiling";
-    if (lower.includes("furniture")) return "Furniture";
-    if (lower.includes("railing")) return "Railing";
-    if (lower.includes("pipe") || lower.includes("duct")) return "MEP";
-    if (lower.includes("site") || lower.includes("topograph") || lower.includes("terrain")) return "Site";
-    if (lower.includes("room") || lower.includes("space")) return "Room";
-    return c.charAt(0).toUpperCase() + c.slice(1);
+
+    // Return the raw string cleaned up if it's meaningful
+    if (c.length > 2 && c.length < 40) return c.charAt(0).toUpperCase() + c.slice(1);
   }
+
   return "Other";
 }
 
+// ── Level extraction ──────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function levelFromProperties(props: Record<string, any>): string {
+function levelFromProperties(flat: Record<string, any>): string {
   const candidates = [
-    props["Level"], props["level"], props["Livello"],
-    props["Floor"], props["Storey"], props["BuildingStorey"],
-    props["IfcBuildingStorey"],
+    flat["Level"], flat["level"], flat["Livello"],
+    flat["Floor"], flat["Storey"], flat["BuildingStorey"],
+    flat["IfcBuildingStorey"],
   ];
   for (const c of candidates) {
     if (c && typeof c === "string" && c.trim()) return c.trim();
@@ -72,15 +110,7 @@ function levelFromProperties(props: Record<string, any>): string {
   return "Unknown";
 }
 
-// ── NEW: Extract area & volume from Speckle V3 materialQuantities ────────────
-// materialQuantities = {
-//   "MaterialName": {
-//     area:   { value: number, units: string },
-//     volume: { value: number, units: string },
-//     ...
-//   },
-//   ...
-// }
+// ── Area & volume from Speckle V3 materialQuantities ─────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractFromMaterialQuantities(mq: Record<string, any>): { area: number; volume: number } | null {
   let totalArea = 0;
@@ -91,27 +121,84 @@ function extractFromMaterialQuantities(mq: Record<string, any>): { area: number;
     const mat = mq[matKey];
     if (!mat || typeof mat !== "object") continue;
 
-    // area
-    if (mat.area && typeof mat.area === "object" && typeof mat.area.value === "number") {
+    if (mat.area && typeof mat.area === "object" && typeof mat.area.value === "number" && !isNaN(mat.area.value)) {
       totalArea += mat.area.value;
       found = true;
     }
-    // volume
-    if (mat.volume && typeof mat.volume === "object" && typeof mat.volume.value === "number") {
+    if (mat.volume && typeof mat.volume === "object" && typeof mat.volume.value === "number" && !isNaN(mat.volume.value)) {
       totalVolume += mat.volume.value;
       found = true;
     }
   }
 
-  if (!found) return null;
-  return { area: totalArea, volume: totalVolume };
+  return found ? { area: totalArea, volume: totalVolume } : null;
 }
 
+// ── Area & volume from IFC quantity sets ─────────────────────────────────────
+// IFC models store quantities in IfcElementQuantity → hasQuantities array
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractFromIfcQuantities(raw: Record<string, any>): { area: number; volume: number } | null {
+  let totalArea = 0;
+  let totalVolume = 0;
+  let found = false;
+
+  // Container names used by Speckle's IFC converter
+  const containerCandidates = [
+    raw.quantities,
+    raw.hasQuantities,
+    raw.Quantities,
+    raw.HasQuantities,
+    // Sometimes stored directly under property sets
+    raw.propertySets,
+    raw.PropertySets,
+  ].filter(Boolean);
+
+  for (const container of containerCandidates) {
+    const items: unknown[] = Array.isArray(container) ? container : Object.values(container);
+    for (const qset of items) {
+      if (!qset || typeof qset !== "object") continue;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const qs = qset as Record<string, any>;
+
+      // Walk into nested quantity arrays
+      const qItems: unknown[] = [
+        ...(Array.isArray(qs.quantities) ? qs.quantities : []),
+        ...(Array.isArray(qs.hasQuantities) ? qs.hasQuantities : []),
+        ...(Array.isArray(qs.Quantities) ? qs.Quantities : []),
+      ];
+
+      for (const q of qItems) {
+        if (!q || typeof q !== "object") continue;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const qty = q as Record<string, any>;
+        const qName = String(qty.name ?? qty.Name ?? "").toLowerCase();
+        // IfcQuantityArea stores value in areaValue, IfcQuantityVolume in volumeValue
+        const value = Number(qty.value ?? qty.Value ?? qty.areaValue ?? qty.volumeValue ?? NaN);
+        if (isNaN(value) || value <= 0) continue;
+
+        if (qName.includes("area") || qName.includes("surface") || qName.includes("floor")) {
+          totalArea += value;
+          found = true;
+        } else if (qName.includes("volume") || qName.includes("vol")) {
+          totalVolume += value;
+          found = true;
+        }
+      }
+    }
+  }
+
+  return found ? { area: totalArea, volume: totalVolume } : null;
+}
+
+// ── Main object builder ───────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function bimObjectFromRaw(raw: Record<string, any>): BimObject | null {
   const id = String(raw.id ?? raw.applicationId ?? "");
   if (!id) return null;
 
+  const speckleType = String(raw.speckle_type ?? raw.type ?? "");
+
+  // Build flat property bag
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const flat: Record<string, any> = { ...raw };
   if (raw.parameters && typeof raw.parameters === "object") {
@@ -126,69 +213,66 @@ function bimObjectFromRaw(raw: Record<string, any>): BimObject | null {
     }
   }
 
-  const speckleType = String(raw.speckle_type ?? raw.type ?? "");
-  const category = categoryFromProperties(flat);
-  const level = levelFromProperties(flat);
+  const category = categoryFromProperties(flat, speckleType);
+  const level    = levelFromProperties(flat);
   const material = String(
     flat["material"] ?? flat["Material"] ??
     flat["MATERIAL_ASSET_PARAM"] ?? flat["STRUCTURAL_MATERIAL_PARAM"] ?? "Unknown"
   ).trim();
   const name = String(flat["name"] ?? flat["Name"] ?? flat["mark"] ?? flat["Mark"] ?? id.slice(0, 12));
 
-  // ── MODIFIED: area & volume extraction ───────────────────────────────────
-  // Step 1: Try materialQuantities (Speckle V3 / Next-Gen connectors)
+  // ── Area & volume: try sources in priority order ─────────────────────────
   let volume = 0;
-  let area = 0;
+  let area   = 0;
+  let source = "none";
 
+  // 1. Speckle V3: materialQuantities
   const mq = raw.materialQuantities;
   if (mq && typeof mq === "object" && !Array.isArray(mq)) {
-    const mqResult = extractFromMaterialQuantities(mq);
-    if (mqResult !== null) {
-      area = mqResult.area;
-      volume = mqResult.volume;
-      console.log(
-        `[BIM][materialQuantities] id=${id.slice(0, 8)} area=${area.toFixed(2)} volume=${volume.toFixed(2)}`
-      );
-    } else {
-      // materialQuantities exists but had no readable values — fall through to legacy
-      console.warn(`[BIM][materialQuantities] id=${id.slice(0, 8)} — found but no numeric values`);
-    }
+    const r = extractFromMaterialQuantities(mq);
+    if (r) { area = r.area; volume = r.volume; source = "materialQuantities"; }
   }
 
-  // Step 2: Fallback to legacy flat params if materialQuantities gave nothing
+  // 2. IFC quantity sets
   if (area === 0 && volume === 0) {
-    const legacyVolume = Number(flat["volume"] ?? flat["Volume"] ?? flat["HOST_VOLUME_COMPUTED"] ?? 0);
-    const legacyArea   = Number(flat["area"]   ?? flat["Area"]   ?? flat["HOST_AREA_COMPUTED"]   ?? 0);
-    volume = isNaN(legacyVolume) ? 0 : legacyVolume;
-    area   = isNaN(legacyArea)   ? 0 : legacyArea;
-    if (volume > 0 || area > 0) {
-      console.log(
-        `[BIM][legacy params] id=${id.slice(0, 8)} area=${area.toFixed(2)} volume=${volume.toFixed(2)}`
-      );
-    }
+    const r = extractFromIfcQuantities(raw);
+    if (r) { area = r.area; volume = r.volume; source = "ifcQuantities"; }
   }
 
-  // Step 3: Final NaN guard
+  // 3. Legacy flat params (Revit / direct fields)
+  if (area === 0 && volume === 0) {
+    const v = Number(flat["volume"] ?? flat["Volume"] ?? flat["HOST_VOLUME_COMPUTED"] ??
+                     flat["NetVolume"] ?? flat["GrossVolume"] ?? 0);
+    const a = Number(flat["area"] ?? flat["Area"] ?? flat["HOST_AREA_COMPUTED"] ??
+                     flat["NetArea"] ?? flat["GrossArea"] ?? flat["NetFloorArea"] ?? flat["GrossFloorArea"] ?? 0);
+    volume = isNaN(v) ? 0 : v;
+    area   = isNaN(a) ? 0 : a;
+    if (volume > 0 || area > 0) source = "legacyParams";
+  }
+
   if (isNaN(volume)) volume = 0;
   if (isNaN(area))   area   = 0;
-  // ── END MODIFIED ─────────────────────────────────────────────────────────
+
+  if (source !== "none" && (area > 0 || volume > 0)) {
+    console.log(`[BIM][${source}] id=${id.slice(0, 8)} cat=${category} area=${area.toFixed(2)}m² vol=${volume.toFixed(2)}m³`);
+  }
 
   return {
     id, speckleType, category, level,
     material: material || "Unknown",
-    volume,
-    area,
+    volume, area,
     family: flat["family"] ?? flat["Family"] ?? undefined,
     mark: name,
   };
 }
 
+// ── Viewer extraction orchestrator ────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function extractFromViewer(viewer: any, logFn: (msg: string) => void): Promise<BimObject[]> {
   const objects: BimObject[] = [];
   const seen = new Set<string>();
 
-  // ── TENTATIVO 1: getObjectProperties() ───────────────────
+  // Attempt 1: getObjectProperties()
   if (typeof viewer.getObjectProperties === "function") {
     logFn("Trying getObjectProperties()...");
     try {
@@ -198,10 +282,7 @@ async function extractFromViewer(viewer: any, logFn: (msg: string) => void): Pro
       if (props && props.length > 0) {
         for (let i = 0; i < Math.min(3, props.length); i++) {
           const p = props[i];
-          console.log(`[BIM][getObjProps][${i}] id=${p.id} type=${p.type}`);
-          console.log(`[BIM][getObjProps][${i}] keys:`, Object.keys(p.properties ?? {}).slice(0, 30).join(", "));
-          console.log(`[BIM][getObjProps][${i}] category="${p.properties?.category ?? p.properties?.Category}" level="${p.properties?.Level ?? p.properties?.level}"`);
-          console.log(`[BIM][getObjProps][${i}] FULL properties:`, JSON.stringify(p.properties ?? {}).slice(0, 800));
+          console.log(`[BIM][getObjProps][${i}] id=${p.id} type=${p.type} keys:`, Object.keys(p.properties ?? {}).slice(0, 20).join(", "));
         }
 
         for (const info of props) {
@@ -222,28 +303,22 @@ async function extractFromViewer(viewer: any, logFn: (msg: string) => void): Pro
 
         if (objects.length > 0) {
           console.log("[BIM] getObjectProperties() SUCCESS:", objects.length);
+          logSummary(objects);
           return objects;
         }
-        console.warn("[BIM] getObjectProperties() → items ma 0 BimObject costruiti, passo al WorldTree");
       }
     } catch (e) {
-      console.warn("[BIM] getObjectProperties() errore:", e);
+      console.warn("[BIM] getObjectProperties() error:", e);
     }
-  } else {
-    console.log("[BIM] getObjectProperties() NON disponibile in questa versione del viewer");
   }
 
-  // ── TENTATIVO 2: WorldTree walk ───────────────────────────
+  // Attempt 2: WorldTree walk
   logFn("Trying WorldTree walk...");
   const worldTree = viewer.getWorldTree?.();
   if (!worldTree) {
-    console.warn("[BIM] getWorldTree() ha restituito null/undefined");
+    console.warn("[BIM] getWorldTree() returned null");
     return objects;
   }
-
-  console.log("[BIM] WorldTree instance keys:", Object.keys(worldTree).join(", "));
-  const proto = Object.getPrototypeOf(worldTree);
-  console.log("[BIM] WorldTree prototype methods:", Object.getOwnPropertyNames(proto).join(", "));
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allRaws: Record<string, any>[] = [];
@@ -251,59 +326,44 @@ async function extractFromViewer(viewer: any, logFn: (msg: string) => void): Pro
   if (typeof worldTree.walk === "function") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     worldTree.walk((node: any) => {
-      const raw =
-        node?.model?.raw ??
-        node?.raw ??
-        node?.data?.raw ??
-        node?.model ??
-        node;
+      const raw = node?.model?.raw ?? node?.raw ?? node?.data?.raw ?? node?.model ?? node;
       if (raw && (raw.id || raw.applicationId)) allRaws.push(raw);
       return true;
     });
-    console.log(`[BIM] walk() → ${allRaws.length} raw objects`);
   }
 
   if (allRaws.length === 0 && typeof worldTree.getAllObjects === "function") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const all: any[] = worldTree.getAllObjects() ?? [];
-    console.log(`[BIM] getAllObjects() → ${all.length}`);
     for (const o of all) {
       const raw = o?.raw ?? o?.model?.raw ?? o;
       if (raw && (raw.id || raw.applicationId)) allRaws.push(raw);
     }
   }
 
-  // Log dettagliato dei primi 5 raw per capire la struttura
-  console.log(`[BIM] Totale raw da WorldTree: ${allRaws.length}`);
-  for (let i = 0; i < Math.min(5, allRaws.length); i++) {
+  console.log(`[BIM] WorldTree raw objects: ${allRaws.length}`);
+
+  // Debug: log first 3 raws in detail
+  for (let i = 0; i < Math.min(3, allRaws.length); i++) {
     const r = allRaws[i];
-    console.log(`\n[BIM][raw][${i}] ===`);
-    console.log(`  id: ${r.id ?? r.applicationId}`);
-    console.log(`  speckle_type: ${r.speckle_type}`);
-    console.log(`  ALL keys: ${Object.keys(r).join(", ")}`);
-    console.log(`  category: ${r.category ?? r.Category ?? "(mancante)"}`);
-    console.log(`  level: ${r.level ?? r.Level ?? "(mancante)"}`);
-    // ── NEW: log materialQuantities presence for debugging
-    console.log(`  materialQuantities: ${r.materialQuantities ? "PRESENT ✅" : "absent"}`);
+    console.log(`\n[BIM][raw][${i}] id=${r.id} type=${r.speckle_type}`);
+    console.log(`  keys:`, Object.keys(r).join(", "));
+    console.log(`  materialQuantities:`, r.materialQuantities ? "PRESENT ✅" : "absent");
+    console.log(`  quantities:`, r.quantities ? "PRESENT ✅" : "absent");
+    console.log(`  hasQuantities:`, r.hasQuantities ? "PRESENT ✅" : "absent");
     if (r.materialQuantities && typeof r.materialQuantities === "object") {
-      console.log(`  materialQuantities keys: ${Object.keys(r.materialQuantities).slice(0, 5).join(", ")}`);
       const firstKey = Object.keys(r.materialQuantities)[0];
-      if (firstKey) {
-        console.log(`  materialQuantities["${firstKey}"]:`, JSON.stringify(r.materialQuantities[firstKey]).slice(0, 200));
-      }
+      if (firstKey) console.log(`  mq["${firstKey}"]:`, JSON.stringify(r.materialQuantities[firstKey]).slice(0, 300));
     }
-    console.log(`  FULL JSON (1500 chars): ${JSON.stringify(r).slice(0, 1500)}`);
+    console.log(`  FULL (2500 chars):`, JSON.stringify(r).slice(0, 2500));
   }
 
-  // Distribuzione speckle_type
+  // speckle_type distribution
   const typeDist: Record<string, number> = {};
-  for (const r of allRaws) {
-    const t = String(r.speckle_type ?? r.type ?? "?");
-    typeDist[t] = (typeDist[t] ?? 0) + 1;
-  }
+  for (const r of allRaws) typeDist[String(r.speckle_type ?? r.type ?? "?")] = (typeDist[String(r.speckle_type ?? r.type ?? "?")] ?? 0) + 1;
   console.log("[BIM] speckle_type distribution:", JSON.stringify(typeDist, null, 2));
 
-  // Converti — accetta TUTTI gli oggetti con id valido
+  // Build BIM objects
   for (const raw of allRaws) {
     const id = String(raw.id ?? raw.applicationId ?? "");
     if (!id || seen.has(id)) continue;
@@ -312,20 +372,23 @@ async function extractFromViewer(viewer: any, logFn: (msg: string) => void): Pro
     if (obj) objects.push(obj);
   }
 
+  logSummary(objects);
+  return objects;
+}
+
+function logSummary(objects: BimObject[]) {
   const catDist: Record<string, number> = {};
   for (const o of objects) catDist[o.category] = (catDist[o.category] ?? 0) + 1;
   console.log("[BIM] Category distribution:", JSON.stringify(catDist, null, 2));
 
-  // ── NEW: log area/volume summary
-  const totalArea = objects.reduce((s, o) => s + o.area, 0);
+  const totalArea   = objects.reduce((s, o) => s + o.area, 0);
   const totalVolume = objects.reduce((s, o) => s + o.volume, 0);
-  const withArea = objects.filter((o) => o.area > 0).length;
-  const withVolume = objects.filter((o) => o.volume > 0).length;
-  console.log(`[BIM] Area/Volume summary: totalArea=${totalArea.toFixed(1)}m² (${withArea} elements), totalVolume=${totalVolume.toFixed(1)}m³ (${withVolume} elements)`);
-
-  return objects;
+  const withArea    = objects.filter((o) => o.area > 0).length;
+  const withVolume  = objects.filter((o) => o.volume > 0).length;
+  console.log(`[BIM] TOTALS: area=${totalArea.toFixed(1)}m² (${withArea} elements), volume=${totalVolume.toFixed(1)}m³ (${withVolume} elements)`);
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
 export const SpeckleViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -369,7 +432,7 @@ export const SpeckleViewer = () => {
 
       viewer.createExtension(CameraController);
       if (FilteringExtension) filteringExtRef.current = viewer.createExtension(FilteringExtension);
-      if (SelectionExtension) selectionExtRef.current = viewer.createExtension(SelectionExtension);
+      if (SelectionExtension)  selectionExtRef.current  = viewer.createExtension(SelectionExtension);
 
       if (ViewerEvent) {
         viewer.on(ViewerEvent.ObjectClicked, (event: unknown) => {
@@ -393,9 +456,7 @@ export const SpeckleViewer = () => {
       const bimObjects = await extractFromViewer(viewer, log);
       log(`Extracted ${bimObjects.length} elements`);
 
-      if (bimObjects.length === 0) {
-        throw new Error("0 elements extracted — controlla la console per i log di debug");
-      }
+      if (bimObjects.length === 0) throw new Error("0 elements extracted — check console");
 
       setBimObjects(bimObjects);
     } catch (err) {
@@ -458,16 +519,20 @@ export const SpeckleViewer = () => {
           <WifiOff className="h-8 w-8 text-red-400 mb-3" />
           <p className="text-sm text-red-300 font-medium text-center mb-2">Failed to load BIM data</p>
           <p className="text-xs text-slate-400 font-mono bg-slate-800/80 px-3 py-2 rounded max-w-sm break-all">{loadError}</p>
-          <button onClick={() => { isInitialized.current = false; setLoadError(null); setLoading(true); initViewer(); }}
-            className="mt-4 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium">
+          <button
+            onClick={() => { isInitialized.current = false; setLoadError(null); setLoading(true); initViewer(); }}
+            className="mt-4 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium"
+          >
             Retry
           </button>
         </div>
       )}
 
       <div className="absolute top-3 right-3 z-10">
-        <button onClick={handleReset}
-          className="p-2 rounded-lg bg-black/40 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white">
+        <button
+          onClick={handleReset}
+          className="p-2 rounded-lg bg-black/40 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white"
+        >
           <RotateCcw className="h-4 w-4" />
         </button>
       </div>
