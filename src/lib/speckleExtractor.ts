@@ -1,17 +1,8 @@
 // ============================================================
-// FILE: src/lib/speckleExtractor.ts  ← SOSTITUISCE COMPLETAMENTE
+// FILE: src/lib/speckleExtractor.ts
 // ============================================================
-// Approccio: REST API nativa di Speckle v2, zero dipendenze extra.
-//
-// FLUSSO:
-// 1. GraphQL  → ottieni referencedObject (root ID) del commit
-// 2. GET /objects/{streamId}/{rootId}/single → oggetto root
-//    Il root ha __closure: { "childId": depth, ... }
-// 3. POST /api/getobjects/{streamId}  → download bulk NDJSON
-//    di tutti i child ID presenti nel __closure
-// 4. Filtra isBimElement() e normalizza → BimObject[]
-//
-// Questo è l'endpoint documentato e stabile di Speckle v2.
+// Versione diagnostica: logga ogni step in dettaglio per
+// capire esattamente cosa restituisce l'API Speckle.
 // ============================================================
 
 import type { BimObject } from "@/store/bimStore";
@@ -21,32 +12,6 @@ const STREAM_ID = "a0102047d4";
 const TOKEN = "0c70148e6c17a7848184ee9a7947313e5359b3bf70";
 const AUTH = { Authorization: `Bearer ${TOKEN}` };
 
-// ── Tipi da ignorare ─────────────────────────────────────────
-function shouldSkip(speckleType: string): boolean {
-  const t = speckleType.toLowerCase();
-  return (
-    t === "base" ||
-    t.startsWith("objects.geometry.") ||
-    t.startsWith("objects.other.rendermaterial") ||
-    t.startsWith("objects.other.displaystyle") ||
-    t.startsWith("objects.other.collection") ||
-    t.startsWith("objects.primitive.") ||
-    t === "reference" ||
-    t.endsWith(":reference")
-  );
-}
-
-function isBimElement(speckleType: string): boolean {
-  if (shouldSkip(speckleType)) return false;
-  const t = speckleType.toLowerCase();
-  return (
-    t.startsWith("objects.builtelements") ||
-    t.startsWith("objects.revit") ||
-    t.includes("ifc")
-  );
-}
-
-// ── Mappatura categoria ──────────────────────────────────────
 export function categoryFromType(speckleType: string): string {
   const s = speckleType.toLowerCase();
   if (s.includes("wall")) return "Wall";
@@ -69,8 +34,9 @@ export function categoryFromType(speckleType: string): string {
 function normalizeObject(raw: Record<string, any>): BimObject | null {
   const id = String(raw.id ?? "");
   const speckleType = String(raw.speckle_type ?? "");
-  if (!id || !speckleType || !isBimElement(speckleType)) return null;
+  if (!id || !speckleType) return null;
 
+  // Livello
   const lvl = raw.level;
   const levelName =
     lvl && typeof lvl === "object"
@@ -121,7 +87,7 @@ function parseNDJSON(text: string): Record<string, unknown>[] {
 }
 
 // ── Step 1: root object ID via GraphQL ───────────────────────
-async function getRootObjectId(): Promise<string> {
+async function getRootObjectId(): Promise<{ rootId: string; modelName: string }> {
   const res = await fetch(`${SERVER}/graphql`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...AUTH },
@@ -153,42 +119,60 @@ async function getRootObjectId(): Promise<string> {
   for (const m of models) {
     const ref = m.versions?.items?.[0]?.referencedObject;
     if (ref) {
-      console.log(`[Speckle] Model: "${m.name}", root: ${ref}`);
-      return ref;
+      console.log(`[Speckle] ✅ Model: "${m.name}", rootId: ${ref}`);
+      return { rootId: ref, modelName: m.name };
     }
   }
   throw new Error("No versions found");
 }
 
-// ── Step 2: scarica oggetto root per leggere __closure ───────
+// ── Step 2: scarica il root object per leggere __closure ─────
 async function getRootObject(rootId: string): Promise<Record<string, unknown>> {
-  // Endpoint v2 corretto per singolo oggetto
-  const res = await fetch(`${SERVER}/objects/${STREAM_ID}/${rootId}/single`, {
-    headers: AUTH,
-  });
-  if (res.ok) return res.json();
+  // Prova tutti gli endpoint possibili in ordine
+  const endpoints = [
+    `${SERVER}/objects/${STREAM_ID}/${rootId}/single`,
+    `${SERVER}/streams/${STREAM_ID}/objects/${rootId}`,
+  ];
 
-  // Fallback: usa l'endpoint legacy streams
-  const res2 = await fetch(`${SERVER}/streams/${STREAM_ID}/objects/${rootId}`, {
-    headers: AUTH,
-  });
-  if (res2.ok) return res2.json();
-
-  throw new Error(`Cannot fetch root object: ${res.status}`);
+  for (const url of endpoints) {
+    console.log(`[Speckle] Trying GET ${url}`);
+    try {
+      const res = await fetch(url, { headers: AUTH });
+      console.log(`[Speckle] → status: ${res.status}`);
+      if (res.ok) {
+        const contentType = res.headers.get("content-type") ?? "";
+        let data: Record<string, unknown>;
+        if (contentType.includes("json")) {
+          data = await res.json();
+        } else {
+          // Potrebbe essere NDJSON — prendi la prima riga
+          const text = await res.text();
+          console.log(`[Speckle] → response (first 200 chars): ${text.slice(0, 200)}`);
+          const lines = parseNDJSON(text);
+          data = (lines[0] ?? {}) as Record<string, unknown>;
+        }
+        console.log(`[Speckle] Root object keys: ${Object.keys(data).join(", ")}`);
+        return data;
+      }
+    } catch (e) {
+      console.warn(`[Speckle] Endpoint failed:`, e);
+    }
+  }
+  throw new Error("All root object endpoints failed");
 }
 
-// ── Step 3: bulk download NDJSON via endpoint ufficiale ──────
-// POST /api/getobjects/{streamId}
-// body: { objects: '["id1","id2",...]' }   ← stringa JSON di array
-async function bulkDownload(ids: string[]): Promise<Record<string, unknown>[]> {
+// ── Step 3a: bulk download via POST /api/getobjects ──────────
+async function bulkDownloadViaAPI(ids: string[]): Promise<Record<string, unknown>[]> {
   if (ids.length === 0) return [];
-
-  const BATCH_SIZE = 500;
+  const BATCH = 500;
   const all: Record<string, unknown>[] = [];
 
-  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
-    const batch = ids.slice(i, i + BATCH_SIZE);
-    const res = await fetch(`${SERVER}/api/getobjects/${STREAM_ID}`, {
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const batch = ids.slice(i, i + BATCH);
+    const url = `${SERVER}/api/getobjects/${STREAM_ID}`;
+    console.log(`[Speckle] POST ${url} — batch ${i}–${i + batch.length}`);
+
+    const res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -198,63 +182,123 @@ async function bulkDownload(ids: string[]): Promise<Record<string, unknown>[]> {
       body: JSON.stringify({ objects: JSON.stringify(batch) }),
     });
 
+    console.log(`[Speckle] → status: ${res.status}, content-type: ${res.headers.get("content-type")}`);
+
     if (!res.ok) {
-      console.warn(`[Speckle] Batch ${i} failed: ${res.status} ${res.statusText}`);
+      const errText = await res.text();
+      console.warn(`[Speckle] Batch failed: ${errText.slice(0, 300)}`);
       continue;
     }
 
     const text = await res.text();
+    console.log(`[Speckle] → body length: ${text.length}, first 300 chars: ${text.slice(0, 300)}`);
     const parsed = parseNDJSON(text);
+    console.log(`[Speckle] → parsed ${parsed.length} objects from NDJSON`);
     all.push(...parsed);
-    console.log(`[Speckle] Batch ${i}–${i + batch.length}: ${parsed.length} objects`);
   }
-
   return all;
+}
+
+// ── Step 3b: fallback — GET singoli oggetti ───────────────────
+// Se /api/getobjects non funziona, proviamo endpoint alternativo
+async function downloadViaObjectsEndpoint(rootId: string): Promise<Record<string, unknown>[]> {
+  // Endpoint che scarica root + tutti i children ricorsivamente
+  const url = `${SERVER}/objects/${STREAM_ID}/${rootId}`;
+  console.log(`[Speckle] Fallback GET ${url}`);
+  const res = await fetch(url, {
+    headers: { Accept: "text/plain", ...AUTH },
+  });
+  console.log(`[Speckle] → status: ${res.status}`);
+  if (!res.ok) {
+    const t = await res.text();
+    console.warn(`[Speckle] Fallback failed: ${t.slice(0, 200)}`);
+    return [];
+  }
+  const text = await res.text();
+  console.log(`[Speckle] → body length: ${text.length}, first 500 chars:\n${text.slice(0, 500)}`);
+  return parseNDJSON(text);
 }
 
 // ── API pubblica ─────────────────────────────────────────────
 export async function fetchBimObjects(): Promise<BimObject[]> {
-  console.log("[Speckle] Fetching real BIM data...");
+  console.log("[Speckle] ═══ Starting diagnostic fetch ═══");
 
-  // 1. Root object ID
-  const rootId = await getRootObjectId();
+  // 1. Root ID
+  const { rootId } = await getRootObjectId();
 
-  // 2. Root object → __closure (mappa di tutti i child IDs)
+  // 2. Root object
   const rootObj = await getRootObject(rootId);
   const closure = rootObj.__closure as Record<string, number> | undefined;
-  const childIds = closure ? Object.keys(closure) : [];
-  console.log(`[Speckle] __closure has ${childIds.length} IDs`);
+  console.log(`[Speckle] __closure type: ${typeof closure}, keys: ${closure ? Object.keys(closure).length : "N/A"}`);
 
-  // 3. Download bulk (include root + tutti i children)
-  const allIds = [rootId, ...childIds];
-  const rawObjects = await bulkDownload(allIds);
-  console.log(`[Speckle] Downloaded ${rawObjects.length} objects total`);
+  let rawObjects: Record<string, unknown>[] = [];
 
-  // 4. Debug: tutti i tipi presenti
+  if (closure && Object.keys(closure).length > 0) {
+    // Abbiamo il __closure — usa bulk download
+    const childIds = Object.keys(closure);
+    console.log(`[Speckle] Downloading ${childIds.length} objects via API...`);
+    console.log(`[Speckle] First 5 IDs: ${childIds.slice(0, 5).join(", ")}`);
+    rawObjects = await bulkDownloadViaAPI([rootId, ...childIds]);
+  } else {
+    console.log("[Speckle] No __closure found — trying fallback endpoint");
+    rawObjects = await downloadViaObjectsEndpoint(rootId);
+  }
+
+  console.log(`[Speckle] Total raw objects: ${rawObjects.length}`);
+
+  // Debug: tutti i tipi
   const allTypes = new Set<string>();
   for (const o of rawObjects) {
     const t = o.speckle_type as string | undefined;
     if (t) allTypes.add(t);
   }
-  console.log("[Speckle] Types in model:", [...allTypes]);
+  console.log("[Speckle] All speckle_types found:", [...allTypes]);
 
-  // 5. Filtra e normalizza
+  // Filtra e normalizza — ACCETTA QUALSIASI TIPO con id valido
+  // (non solo builtelements) per debug iniziale
   const seen = new Set<string>();
   const bimObjects: BimObject[] = [];
+  const skippedTypes = new Set<string>();
+
+  const SKIP_EXACT = new Set([
+    "base", "reference",
+  ]);
+  const SKIP_PREFIX = [
+    "objects.geometry.",
+    "objects.other.rendermaterial",
+    "objects.other.displaystyle",
+    "objects.primitive.",
+  ];
 
   for (const raw of rawObjects) {
+    const speckleType = String(raw.speckle_type ?? "");
+    const t = speckleType.toLowerCase();
+
+    // Skip geometry e materiali
+    if (SKIP_EXACT.has(t) || SKIP_PREFIX.some((p) => t.startsWith(p))) {
+      skippedTypes.add(speckleType);
+      continue;
+    }
+
     const obj = normalizeObject(raw as Record<string, unknown>);
     if (!obj || seen.has(obj.id)) continue;
     seen.add(obj.id);
     bimObjects.push(obj);
   }
 
+  console.log(`[Speckle] Skipped types: ${[...skippedTypes].join(", ")}`);
   console.log(`[Speckle] BIM elements extracted: ${bimObjects.length}`);
+
+  if (bimObjects.length > 0) {
+    const cats: Record<string, number> = {};
+    for (const o of bimObjects) cats[o.category] = (cats[o.category] ?? 0) + 1;
+    console.log("[Speckle] Categories:", cats);
+  }
 
   if (bimObjects.length === 0) {
     throw new Error(
-      `No BIM elements found among ${rawObjects.length} objects. ` +
-      `speckle_types: ${[...allTypes].slice(0, 12).join(", ")}`
+      `No elements found among ${rawObjects.length} objects. ` +
+      `Types: ${[...allTypes].join(", ")}`
     );
   }
 
