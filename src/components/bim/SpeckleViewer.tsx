@@ -1,6 +1,6 @@
 // FILE: src/components/bim/SpeckleViewer.tsx
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useBimStore } from "@/store/bimStore";
 import { Loader2, RotateCcw, WifiOff } from "lucide-react";
 import type { BimObject } from "@/store/bimStore";
@@ -8,231 +8,233 @@ import type { BimObject } from "@/store/bimStore";
 const PROJECT_URL = "https://app.speckle.systems/projects/a0102047d4/models/all";
 const EMBED_TOKEN = "0c70148e6c17a7848184ee9a7947313e5359b3bf70";
 
-const SKIP_EXACT = new Set(["base", "reference", "dataobject"]);
-const SKIP_PREFIX = [
-  "objects.geometry.",
-  "objects.other.rendermaterial",
-  "objects.other.displaystyle",
-  "objects.primitive.",
-];
-function shouldSkip(t: string): boolean {
-  const tl = t.toLowerCase();
-  return SKIP_EXACT.has(tl) || SKIP_PREFIX.some((p) => tl.startsWith(p));
-}
-
-function categoryFromType(speckleType: string): string {
-  const s = speckleType.toLowerCase();
-  if (s.includes("ifcwall")) return "Wall";
-  if (s.includes("ifcslab") || s.includes("ifcfloor")) return "Floor";
-  if (s.includes("ifccolumn")) return "Column";
-  if (s.includes("ifcbeam") || s.includes("ifcmember")) return "Beam";
-  if (s.includes("ifcroof")) return "Roof";
-  if (s.includes("ifcwindow")) return "Window";
-  if (s.includes("ifcdoor")) return "Door";
-  if (s.includes("ifcstair")) return "Stair";
-  if (s.includes("ifccovering") || s.includes("ifcceiling")) return "Ceiling";
-  if (s.includes("ifcfurnishing") || s.includes("ifcfurniture")) return "Furniture";
-  if (s.includes("ifcrailing")) return "Railing";
-  if (s.includes("ifcpipe") || s.includes("ifcduct") || s.includes("ifcflow")) return "MEP";
-  if (s.includes("ifcsite") || s.includes("ifcterrain")) return "Site";
-  if (s.includes("ifcspace") || s.includes("ifczone")) return "Room";
-  if (s.includes("ifcbuilding")) return "Building";
-  if (s.includes("ifcroadpavement") || s.includes("ifcroad")) return "Road";
-  if (s.includes("ifcrailway") || s.includes("ifctrack")) return "Railway";
-  if (s.includes("ifcbridge")) return "Bridge";
-  if (s.includes("ifcsign")) return "Sign";
-  if (s.includes("ifc")) return "IFC-Other";
-  if (s.includes("wall")) return "Wall";
-  if (s.includes("floor") || s.includes("slab")) return "Floor";
-  if (s.includes("column")) return "Column";
-  if (s.includes("beam") || s.includes("framing")) return "Beam";
-  if (s.includes("roof")) return "Roof";
-  if (s.includes("window")) return "Window";
-  if (s.includes("door")) return "Door";
-  if (s.includes("stair")) return "Stair";
-  if (s.includes("ceiling")) return "Ceiling";
-  if (s.includes("furniture")) return "Furniture";
-  if (s.includes("railing")) return "Railing";
-  if (s.includes("pipe") || s.includes("duct") || s.includes("conduit") || s.includes("cable")) return "MEP";
-  if (s.includes("site") || s.includes("topography") || s.includes("terrain")) return "Site";
-  if (s.includes("room") || s.includes("space")) return "Room";
-  if (s.includes("road") || s.includes("pavement") || s.includes("corridor")) return "Road";
-  if (s.includes("bridge")) return "Bridge";
-  if (s.includes("tunnel")) return "Tunnel";
-  if (s.includes("land") || s.includes("parcel") || s.includes("polygon")) return "Land";
-  if (s.includes("vegetation") || s.includes("tree") || s.includes("plant")) return "Vegetation";
-  if (s.includes("water") || s.includes("river") || s.includes("lake")) return "Water";
-  if (s.includes("building") || s.includes("mass")) return "Building";
-  if (s.includes("network") || s.includes("utility")) return "Utility";
-  if (s.includes("instanceproxy")) return "Instance";
-  if (s.includes("definitionproxy")) return "Definition";
-  if (s.includes("levelproxy")) return "Level";
-  if (s.includes("collection")) return "Collection";
-  const parts = speckleType.split(".");
-  if (parts.length > 1) {
-    const last = parts[parts.length - 1];
-    if (last && last.length > 2 && last !== "Base") return last;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function categoryFromProperties(props: Record<string, any>): string {
+  const raw =
+    props["category"] ?? props["Category"] ??
+    props["ifcType"] ?? props["IfcType"] ??
+    props["type"] ?? props["Type"] ?? "";
+  if (raw && typeof raw === "string" && raw.trim()) {
+    const c = raw.trim();
+    const MAP: Record<string, string> = {
+      "Walls": "Wall", "Wall": "Wall",
+      "Floors": "Floor", "Floor": "Floor", "Slab": "Floor",
+      "Columns": "Column", "Column": "Column",
+      "Structural Framing": "Beam", "Beams": "Beam", "Beam": "Beam",
+      "Roofs": "Roof", "Roof": "Roof",
+      "Windows": "Window", "Window": "Window",
+      "Doors": "Door", "Door": "Door",
+      "Stairs": "Stair", "Stair": "Stair",
+      "Ceilings": "Ceiling", "Ceiling": "Ceiling",
+      "Furniture": "Furniture",
+      "Railings": "Railing", "Railing": "Railing",
+      "Pipes": "MEP", "Ducts": "MEP", "MEP": "MEP",
+      "Topography": "Site", "Site": "Site",
+      "Rooms": "Room", "Room": "Room",
+      "Generic Models": "Generic",
+    };
+    if (MAP[c]) return MAP[c];
+    const lower = c.toLowerCase();
+    if (lower.includes("wall")) return "Wall";
+    if (lower.includes("floor") || lower.includes("slab")) return "Floor";
+    if (lower.includes("column")) return "Column";
+    if (lower.includes("beam") || lower.includes("framing")) return "Beam";
+    if (lower.includes("roof")) return "Roof";
+    if (lower.includes("window")) return "Window";
+    if (lower.includes("door")) return "Door";
+    if (lower.includes("stair")) return "Stair";
+    if (lower.includes("ceiling")) return "Ceiling";
+    if (lower.includes("furniture")) return "Furniture";
+    if (lower.includes("railing")) return "Railing";
+    if (lower.includes("pipe") || lower.includes("duct")) return "MEP";
+    if (lower.includes("site") || lower.includes("topograph") || lower.includes("terrain")) return "Site";
+    if (lower.includes("room") || lower.includes("space")) return "Room";
+    return c.charAt(0).toUpperCase() + c.slice(1);
   }
   return "Other";
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractLevel(raw: Record<string, any>): string {
+function levelFromProperties(props: Record<string, any>): string {
   const candidates = [
-    raw.level?.name, raw.level, raw["Level"]?.name, raw["Level"],
-    raw.storey, raw["Storey"], raw.floor, raw["Floor"],
-    raw.elevation, raw["@Level"],
+    props["Level"], props["level"], props["Livello"],
+    props["Floor"], props["Storey"], props["BuildingStorey"],
+    props["IfcBuildingStorey"],
   ];
   for (const c of candidates) {
     if (c && typeof c === "string" && c.trim()) return c.trim();
-    if (c && typeof c === "object" && c.name) return String(c.name).trim();
-    if (c && typeof c === "number") return `Level ${c}`;
-  }
-  const params = raw.parameters as Record<string, Record<string, unknown>> | undefined;
-  if (params) {
-    for (const key of ["SCHEDULE_LEVEL_PARAM", "FAMILY_LEVEL_PARAM", "INSTANCE_REFERENCE_LEVEL_PARAM", "LEVEL_PARAM"]) {
-      const val = params[key]?.value;
-      if (val && typeof val === "string" && val.trim()) return val.trim();
+    if (c && typeof c === "object") {
+      const name = c.name ?? c.Name ?? c.elevation;
+      if (name) return String(name).trim();
     }
+    if (typeof c === "number") return `Level ${c}`;
   }
   return "Unknown";
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractMaterial(raw: Record<string, any>): string {
-  const params = raw.parameters as Record<string, Record<string, unknown>> | undefined;
-  const pv = (key: string) => params?.[key]?.value;
-  const candidates = [
-    pv("MATERIAL_ASSET_PARAM"), pv("ALL_MODEL_MATERIAL_NAME"), pv("STRUCTURAL_MATERIAL_PARAM"),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (raw.materials as any[])?.[0]?.name, raw.material, raw["Material"],
-  ];
-  for (const c of candidates) {
-    if (c && typeof c === "string" && c.trim() && c !== "Unknown") return c.trim();
-  }
-  return "Unknown";
-}
-
-// ── Calcola area da bbox/vertices per oggetti GIS/Civil ───────
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function estimateAreaVolume(raw: Record<string, any>): { area: number; volume: number } {
-  const params = raw.parameters as Record<string, Record<string, unknown>> | undefined;
-  const pv = (key: string) => {
-    const v = params?.[key]?.value;
-    return v !== undefined ? Number(v) : NaN;
-  };
-
-  // 1. Prova prima i parametri Revit/IFC standard
-  let volume = pv("HOST_VOLUME_COMPUTED");
-  if (isNaN(volume)) volume = pv("VOLUME");
-  if (isNaN(volume)) volume = Number(raw.volume ?? raw.Volume ?? NaN);
-
-  let area = pv("HOST_AREA_COMPUTED");
-  if (isNaN(area)) area = pv("AREA");
-  if (isNaN(area)) area = Number(raw.area ?? raw.Area ?? raw.baseArea ?? NaN);
-
-  // 2. Prova da bbox (presente su molti oggetti GIS/Civil Speckle)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bbox = raw.bbox ?? raw.boundingBox ?? raw["@BoundingBox"] as any;
-  if (bbox) {
-    const minX = Number(bbox.min?.x ?? bbox.minX ?? NaN);
-    const minY = Number(bbox.min?.y ?? bbox.minY ?? NaN);
-    const minZ = Number(bbox.min?.z ?? bbox.minZ ?? NaN);
-    const maxX = Number(bbox.max?.x ?? bbox.maxX ?? NaN);
-    const maxY = Number(bbox.max?.y ?? bbox.maxY ?? NaN);
-    const maxZ = Number(bbox.max?.z ?? bbox.maxZ ?? NaN);
-
-    if (!isNaN(minX) && !isNaN(maxX)) {
-      const dx = Math.abs(maxX - minX);
-      const dy = Math.abs(maxY - minY);
-      const dz = !isNaN(minZ) ? Math.abs(maxZ - minZ) : 0;
-
-      if (isNaN(area) && dx > 0 && dy > 0) {
-        area = dx * dy; // stima piano XY
-      }
-      if (isNaN(volume) && dx > 0 && dy > 0 && dz > 0) {
-        volume = dx * dy * dz;
-      }
-    }
-  }
-
-  // 3. Stima da displayValue/mesh vertices se disponibili
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const displayValue = raw.displayValue ?? raw["@displayValue"] as any[];
-  if (Array.isArray(displayValue) && displayValue.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mesh = displayValue[0] as any;
-    const verts = mesh?.vertices as number[] | undefined;
-    if (verts && verts.length >= 6 && isNaN(area)) {
-      // Calcola bbox dai vertices per stima area
-      let mnX = Infinity, mnY = Infinity, mxX = -Infinity, mxY = -Infinity;
-      for (let i = 0; i < verts.length; i += 3) {
-        const x = verts[i], y = verts[i + 1];
-        if (x < mnX) mnX = x; if (x > mxX) mxX = x;
-        if (y < mnY) mnY = y; if (y > mxY) mxY = y;
-      }
-      if (isFinite(mxX - mnX)) area = (mxX - mnX) * (mxY - mnY);
-    }
-  }
-
-  return {
-    volume: isNaN(volume) || volume < 0 ? 0 : volume,
-    area: isNaN(area) || area < 0 ? 0 : area,
-  };
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractFromRaw(raw: Record<string, any>): BimObject | null {
+function bimObjectFromRaw(raw: Record<string, any>): BimObject | null {
   const id = String(raw.id ?? raw.applicationId ?? "");
-  const speckleType = String(raw.speckle_type ?? raw.type ?? "");
-  if (!id || !speckleType || shouldSkip(speckleType)) return null;
+  if (!id) return null;
 
-  const { area, volume } = estimateAreaVolume(raw);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const flat: Record<string, any> = { ...raw };
+  if (raw.parameters && typeof raw.parameters === "object") {
+    for (const [k, v] of Object.entries(raw.parameters)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      flat[k] = (v as any)?.value ?? v;
+    }
+  }
+  if (raw.properties && typeof raw.properties === "object") {
+    for (const [k, v] of Object.entries(raw.properties)) {
+      if (!(k in flat)) flat[k] = v;
+    }
+  }
+
+  const speckleType = String(raw.speckle_type ?? raw.type ?? "");
+  const category = categoryFromProperties(flat);
+  const level = levelFromProperties(flat);
+  const material = String(
+    flat["material"] ?? flat["Material"] ??
+    flat["MATERIAL_ASSET_PARAM"] ?? flat["STRUCTURAL_MATERIAL_PARAM"] ?? "Unknown"
+  ).trim();
+  const volume = Number(flat["volume"] ?? flat["Volume"] ?? flat["HOST_VOLUME_COMPUTED"] ?? 0);
+  const area = Number(flat["area"] ?? flat["Area"] ?? flat["HOST_AREA_COMPUTED"] ?? 0);
+  const name = String(flat["name"] ?? flat["Name"] ?? flat["mark"] ?? flat["Mark"] ?? id.slice(0, 12));
 
   return {
-    id,
-    speckleType,
-    category: categoryFromType(speckleType),
-    level: extractLevel(raw),
-    material: extractMaterial(raw),
-    volume,
-    area,
-    family: raw.family as string | undefined,
-    mark: (raw.mark ?? raw["Mark"] ?? raw.name ?? raw["Name"]) as string | undefined,
+    id, speckleType, category, level,
+    material: material || "Unknown",
+    volume: isNaN(volume) ? 0 : volume,
+    area: isNaN(area) ? 0 : area,
+    family: flat["family"] ?? flat["Family"] ?? undefined,
+    mark: name,
   };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function walkWorldTree(worldTree: any): BimObject[] {
+async function extractFromViewer(viewer: any, logFn: (msg: string) => void): Promise<BimObject[]> {
   const objects: BimObject[] = [];
   const seen = new Set<string>();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const processRaw = (raw: Record<string, any>) => {
-    const obj = extractFromRaw(raw);
-    if (obj && !seen.has(obj.id)) {
-      seen.add(obj.id);
-      objects.push(obj);
+  // ── TENTATIVO 1: getObjectProperties() ───────────────────
+  if (typeof viewer.getObjectProperties === "function") {
+    logFn("Trying getObjectProperties()...");
+    try {
+      const props = await viewer.getObjectProperties();
+      console.log(`[BIM] getObjectProperties() → ${props?.length ?? 0} items`);
+
+      if (props && props.length > 0) {
+        for (let i = 0; i < Math.min(3, props.length); i++) {
+          const p = props[i];
+          console.log(`[BIM][getObjProps][${i}] id=${p.id} type=${p.type}`);
+          console.log(`[BIM][getObjProps][${i}] keys:`, Object.keys(p.properties ?? {}).slice(0, 30).join(", "));
+          console.log(`[BIM][getObjProps][${i}] category="${p.properties?.category ?? p.properties?.Category}" level="${p.properties?.Level ?? p.properties?.level}"`);
+          console.log(`[BIM][getObjProps][${i}] FULL properties:`, JSON.stringify(p.properties ?? {}).slice(0, 800));
+        }
+
+        for (const info of props) {
+          const id = String(info.id ?? "");
+          if (!id || seen.has(id)) continue;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const flat: Record<string, any> = { id };
+          if (info.properties) {
+            for (const [k, v] of Object.entries(info.properties)) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              flat[k] = (v as any)?.value !== undefined ? (v as any).value : v;
+            }
+          }
+          flat["speckle_type"] = flat["speckle_type"] ?? info.type ?? "";
+          const obj = bimObjectFromRaw(flat);
+          if (obj) { seen.add(id); objects.push(obj); }
+        }
+
+        if (objects.length > 0) {
+          console.log("[BIM] getObjectProperties() SUCCESS:", objects.length);
+          return objects;
+        }
+        console.warn("[BIM] getObjectProperties() → items ma 0 BimObject costruiti, passo al WorldTree");
+      }
+    } catch (e) {
+      console.warn("[BIM] getObjectProperties() errore:", e);
     }
-  };
+  } else {
+    console.log("[BIM] getObjectProperties() NON disponibile in questa versione del viewer");
+  }
+
+  // ── TENTATIVO 2: WorldTree walk ───────────────────────────
+  logFn("Trying WorldTree walk...");
+  const worldTree = viewer.getWorldTree?.();
+  if (!worldTree) {
+    console.warn("[BIM] getWorldTree() ha restituito null/undefined");
+    return objects;
+  }
+
+  console.log("[BIM] WorldTree instance keys:", Object.keys(worldTree).join(", "));
+  const proto = Object.getPrototypeOf(worldTree);
+  console.log("[BIM] WorldTree prototype methods:", Object.getOwnPropertyNames(proto).join(", "));
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allRaws: Record<string, any>[] = [];
 
   if (typeof worldTree.walk === "function") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     worldTree.walk((node: any) => {
-      const raw = node?.model?.raw ?? node?.raw ?? node?.data?.raw;
-      if (raw) processRaw(raw);
+      const raw =
+        node?.model?.raw ??
+        node?.raw ??
+        node?.data?.raw ??
+        node?.model ??
+        node;
+      if (raw && (raw.id || raw.applicationId)) allRaws.push(raw);
       return true;
     });
+    console.log(`[BIM] walk() → ${allRaws.length} raw objects`);
   }
 
-  if (objects.length === 0 && typeof worldTree.getAllObjects === "function") {
+  if (allRaws.length === 0 && typeof worldTree.getAllObjects === "function") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const all: any[] = worldTree.getAllObjects() ?? [];
+    console.log(`[BIM] getAllObjects() → ${all.length}`);
     for (const o of all) {
       const raw = o?.raw ?? o?.model?.raw ?? o;
-      if (raw) processRaw(raw);
+      if (raw && (raw.id || raw.applicationId)) allRaws.push(raw);
     }
   }
+
+  // Log dettagliato dei primi 5 raw per capire la struttura
+  console.log(`[BIM] Totale raw da WorldTree: ${allRaws.length}`);
+  for (let i = 0; i < Math.min(5, allRaws.length); i++) {
+    const r = allRaws[i];
+    console.log(`\n[BIM][raw][${i}] ===`);
+    console.log(`  id: ${r.id ?? r.applicationId}`);
+    console.log(`  speckle_type: ${r.speckle_type}`);
+    console.log(`  ALL keys: ${Object.keys(r).join(", ")}`);
+    console.log(`  category: ${r.category ?? r.Category ?? "(mancante)"}`);
+    console.log(`  level: ${r.level ?? r.Level ?? "(mancante)"}`);
+    console.log(`  FULL JSON (1500 chars): ${JSON.stringify(r).slice(0, 1500)}`);
+  }
+
+  // Distribuzione speckle_type
+  const typeDist: Record<string, number> = {};
+  for (const r of allRaws) {
+    const t = String(r.speckle_type ?? r.type ?? "?");
+    typeDist[t] = (typeDist[t] ?? 0) + 1;
+  }
+  console.log("[BIM] speckle_type distribution:", JSON.stringify(typeDist, null, 2));
+
+  // Converti — accetta TUTTI gli oggetti con id valido
+  for (const raw of allRaws) {
+    const id = String(raw.id ?? raw.applicationId ?? "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const obj = bimObjectFromRaw(raw);
+    if (obj) objects.push(obj);
+  }
+
+  const catDist: Record<string, number> = {};
+  for (const o of objects) catDist[o.category] = (catDist[o.category] ?? 0) + 1;
+  console.log("[BIM] Category distribution:", JSON.stringify(catDist, null, 2));
 
   return objects;
 }
@@ -246,6 +248,12 @@ export const SpeckleViewer = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const selectionExtRef = useRef<any>(null);
   const isInitialized = useRef(false);
+
+  const [statusLines, setStatusLines] = useState<string[]>([]);
+  const log = (msg: string) => {
+    console.log(`[SpeckleViewer] ${msg}`);
+    setStatusLines((prev) => [...prev.slice(-6), msg]);
+  };
 
   const {
     setSelectedIds, setLoading, setLoadError, setBimObjects,
@@ -286,23 +294,27 @@ export const SpeckleViewer = () => {
         });
       }
 
+      log("Loading 3D model...");
       const urls = await UrlHelper.getResourceUrls(PROJECT_URL, EMBED_TOKEN);
       for (const url of urls) {
         const loader = new SpeckleLoader(viewer.getWorldTree(), url, EMBED_TOKEN);
         await viewer.loadObject(loader, true);
       }
+      log("3D model loaded");
 
-      const worldTree = viewer.getWorldTree();
-      const bimObjects = walkWorldTree(worldTree);
+      log("Extracting BIM metadata...");
+      const bimObjects = await extractFromViewer(viewer, log);
+      log(`Extracted ${bimObjects.length} elements`);
 
       if (bimObjects.length === 0) {
-        throw new Error("Nessun elemento trovato nel modello");
+        throw new Error("0 elements extracted — controlla la console per i log di debug");
       }
 
       setBimObjects(bimObjects);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       setLoadError(msg);
+      log(`Error: ${msg}`);
     } finally {
       setLoading(false);
     }
@@ -359,23 +371,27 @@ export const SpeckleViewer = () => {
           <WifiOff className="h-8 w-8 text-red-400 mb-3" />
           <p className="text-sm text-red-300 font-medium text-center mb-2">Failed to load BIM data</p>
           <p className="text-xs text-slate-400 font-mono bg-slate-800/80 px-3 py-2 rounded max-w-sm break-all">{loadError}</p>
-          <button
-            onClick={() => { isInitialized.current = false; setLoadError(null); setLoading(true); initViewer(); }}
-            className="mt-4 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium"
-          >
+          <button onClick={() => { isInitialized.current = false; setLoadError(null); setLoading(true); initViewer(); }}
+            className="mt-4 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium">
             Retry
           </button>
         </div>
       )}
 
       <div className="absolute top-3 right-3 z-10">
-        <button
-          onClick={handleReset}
-          className="p-2 rounded-lg bg-black/40 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white"
-        >
+        <button onClick={handleReset}
+          className="p-2 rounded-lg bg-black/40 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white">
           <RotateCcw className="h-4 w-4" />
         </button>
       </div>
+
+      {statusLines.length > 0 && (
+        <div className="absolute bottom-8 left-2 right-2 z-20 bg-black/70 rounded p-2 pointer-events-none">
+          {statusLines.map((line, i) => (
+            <p key={i} className="text-[10px] font-mono text-green-300 leading-tight">{line}</p>
+          ))}
+        </div>
+      )}
 
       <div className="absolute bottom-3 left-3 z-10">
         <span className="text-xs text-white/50 bg-black/30 backdrop-blur-sm px-2 py-1 rounded">
