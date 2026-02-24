@@ -1,14 +1,10 @@
-// ============================================================
 // FILE: src/pages/BimDashboard.tsx
-// Layout: viewer 3D occupa tutta la colonna destra
-//         colonna sinistra: CategoryChart (top) + LevelChart (bottom)
-// ============================================================
 
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, RefreshCw, Layers } from "lucide-react";
 import { SpeckleViewer } from "@/components/bim/SpeckleViewer";
 import { CategoryChart } from "@/components/charts/CategoryChart";
-import { LevelChart } from "@/components/charts/LevelChart";
+import { AreaVolumeChart } from "@/components/charts/AreaVolumeChart";
 import { useBimStore } from "@/store/bimStore";
 
 export const BimDashboard = () => {
@@ -68,29 +64,26 @@ export const BimDashboard = () => {
             {activeFilters.categories.map((c) => (
               <span key={c} className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">{c}</span>
             ))}
-            {activeFilters.levels.map((l) => (
-              <span key={l} className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">{l}</span>
-            ))}
           </div>
         </div>
       </header>
 
-      {/* ── Main layout: sinistra (grafici) | destra (viewer) ── */}
+      {/* ── Main layout ── */}
       <main className="flex-1 min-h-0 flex gap-2 p-2">
 
-        {/* Colonna sinistra: due grafici impilati */}
+        {/* Colonna sinistra: CategoryChart + AreaVolumeChart */}
         <div className="w-[380px] shrink-0 flex flex-col gap-2">
-          {/* Grafico categorie */}
+          {/* Grafico conteggio per categoria */}
           <div className="flex-1 min-h-0 bg-[#161b27] rounded-xl border border-gray-800 p-4 flex flex-col overflow-hidden">
             <CategoryChart />
           </div>
-          {/* Grafico per piano */}
+          {/* Grafico area/volume per categoria */}
           <div className="flex-1 min-h-0 bg-[#161b27] rounded-xl border border-gray-800 p-4 flex flex-col overflow-hidden">
-            <LevelChart />
+            <AreaVolumeChart />
           </div>
         </div>
 
-        {/* Colonna destra: viewer 3D a tutta altezza */}
+        {/* Colonna destra: viewer 3D */}
         <div className="flex-1 min-h-0 min-w-0 rounded-xl overflow-hidden">
           <SpeckleViewer />
         </div>
