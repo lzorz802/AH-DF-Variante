@@ -1,11 +1,7 @@
 // ============================================================
-// FILE: src/pages/BimDashboard.tsx  (FILE NUOVO)
-// ============================================================
-// Pagina principale del BIM Dashboard.
-// Layout 2×2:  [CategoryChart]  [SpeckleViewer 3D]
-//              [LevelChart]     [PropertiesPanel]
-//
-// Sostituisce il vecchio ReportViewer per il report id="5".
+// FILE: src/pages/BimDashboard.tsx
+// Layout: viewer 3D occupa tutta la colonna destra
+//         colonna sinistra: CategoryChart (top) + LevelChart (bottom)
 // ============================================================
 
 import { useNavigate } from "react-router-dom";
@@ -13,7 +9,6 @@ import { ArrowLeft, RefreshCw, Layers } from "lucide-react";
 import { SpeckleViewer } from "@/components/bim/SpeckleViewer";
 import { CategoryChart } from "@/components/charts/CategoryChart";
 import { LevelChart } from "@/components/charts/LevelChart";
-import { PropertiesPanel } from "@/components/charts/PropertiesPanel";
 import { useBimStore } from "@/store/bimStore";
 
 export const BimDashboard = () => {
@@ -24,7 +19,6 @@ export const BimDashboard = () => {
   const hasActiveState =
     activeFilters.categories.length > 0 ||
     activeFilters.levels.length > 0 ||
-    activeFilters.materials.length > 0 ||
     selectedIds.size > 0;
 
   const handleReset = () => {
@@ -34,31 +28,25 @@ export const BimDashboard = () => {
 
   return (
     <div className="h-screen flex flex-col bg-[#0f1117] overflow-hidden">
-      {/* ── Topbar ────────────────────────────────────────────── */}
+      {/* ── Topbar ── */}
       <header className="flex items-center justify-between px-4 py-2.5 border-b border-gray-800 bg-[#0f1117] shrink-0">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate("/")}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg
-                       bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium
-                       transition-colors"
+                       bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             Dashboard
           </button>
-
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-md bg-blue-500/20 flex items-center justify-center">
               <Layers className="h-3.5 w-3.5 text-blue-400" />
             </div>
             <div>
-              <h1 className="text-sm font-semibold text-gray-100 leading-tight">
-                Speckle BIM Viewer
-              </h1>
+              <h1 className="text-sm font-semibold text-gray-100 leading-tight">Speckle BIM Viewer</h1>
               <p className="text-[10px] text-gray-500 leading-tight">
-                {isLoading
-                  ? "Caricamento…"
-                  : `${bimObjects.length} elementi · Modello federato`}
+                {isLoading ? "Caricamento…" : `${bimObjects.length} elementi · Modello federato`}
               </p>
             </div>
           </div>
@@ -76,62 +64,37 @@ export const BimDashboard = () => {
               Reset filtri
             </button>
           )}
-
-          {/* Badge filtri attivi */}
-          {(activeFilters.categories.length > 0 ||
-            activeFilters.levels.length > 0) && (
-            <div className="flex gap-1">
-              {activeFilters.categories.map((c) => (
-                <span
-                  key={c}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30"
-                >
-                  {c}
-                </span>
-              ))}
-              {activeFilters.levels.map((l) => (
-                <span
-                  key={l}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30"
-                >
-                  {l}
-                </span>
-              ))}
-            </div>
-          )}
+          <div className="flex gap-1 flex-wrap">
+            {activeFilters.categories.map((c) => (
+              <span key={c} className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">{c}</span>
+            ))}
+            {activeFilters.levels.map((l) => (
+              <span key={l} className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30">{l}</span>
+            ))}
+          </div>
         </div>
       </header>
 
-      {/* ── Grid 2×2 ──────────────────────────────────────────── */}
-      <main className="flex-1 min-h-0 grid grid-cols-2 grid-rows-2 gap-2 p-2">
+      {/* ── Main layout: sinistra (grafici) | destra (viewer) ── */}
+      <main className="flex-1 min-h-0 flex gap-2 p-2">
 
-        {/* ┌─────────────────────┐ ┌─────────────────────┐
-            │  CategoryChart      │ │  SpeckleViewer 3D   │
-            └─────────────────────┘ └─────────────────────┘ */}
-
-        {/* Top-left: Grafico categorie */}
-        <div className="bg-[#161b27] rounded-xl border border-gray-800 p-4 flex flex-col min-h-0 overflow-hidden">
-          <CategoryChart />
+        {/* Colonna sinistra: due grafici impilati */}
+        <div className="w-[380px] shrink-0 flex flex-col gap-2">
+          {/* Grafico categorie */}
+          <div className="flex-1 min-h-0 bg-[#161b27] rounded-xl border border-gray-800 p-4 flex flex-col overflow-hidden">
+            <CategoryChart />
+          </div>
+          {/* Grafico per piano */}
+          <div className="flex-1 min-h-0 bg-[#161b27] rounded-xl border border-gray-800 p-4 flex flex-col overflow-hidden">
+            <LevelChart />
+          </div>
         </div>
 
-        {/* Top-right: Viewer BIM 3D */}
-        <div className="rounded-xl overflow-hidden min-h-0">
+        {/* Colonna destra: viewer 3D a tutta altezza */}
+        <div className="flex-1 min-h-0 min-w-0 rounded-xl overflow-hidden">
           <SpeckleViewer />
         </div>
 
-        {/* ┌─────────────────────┐ ┌─────────────────────┐
-            │  LevelChart         │ │  PropertiesPanel    │
-            └─────────────────────┘ └─────────────────────┘ */}
-
-        {/* Bottom-left: Grafico per piano */}
-        <div className="bg-[#161b27] rounded-xl border border-gray-800 p-4 flex flex-col min-h-0 overflow-hidden">
-          <LevelChart />
-        </div>
-
-        {/* Bottom-right: Pannello proprietà */}
-        <div className="bg-[#161b27] rounded-xl border border-gray-800 p-4 flex flex-col min-h-0 overflow-hidden">
-          <PropertiesPanel />
-        </div>
       </main>
     </div>
   );
