@@ -1,24 +1,20 @@
 // ============================================================
-// FILE: src/store/bimStore.ts  (FILE NUOVO)
-// ============================================================
-// Stato centralizzato condiviso tra viewer 3D e grafici.
-// Installa zustand prima: npm install zustand
+// FILE: src/store/bimStore.ts  (MODIFICATO per cross-filtering)
 // ============================================================
 
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 
-// ── Tipi ─────────────────────────────────────────────────────
 export interface BimObject {
   id: string;
-  speckleType: string;   // es. "Objects.BuiltElements.Wall"
-  category: string;      // es. "Wall", "Beam", "Column", "Slab" …
-  level: string;         // es. "Level 1", "Ground Floor" …
-  material: string;      // es. "Concrete", "Steel" …
-  volume: number;        // m³
-  area: number;          // m²
-  family?: string;       // Revit family name
-  mark?: string;         // elemento mark
+  speckleType: string;
+  category: string;
+  level: string;
+  material: string;
+  volume: number;
+  area: number;
+  family?: string;
+  mark?: string;
 }
 
 export interface ActiveFilters {
@@ -28,22 +24,26 @@ export interface ActiveFilters {
 }
 
 interface BimStore {
-  // ── Dati grezzi estratti dal modello ─────────────────────
   bimObjects: BimObject[];
   isLoading: boolean;
   loadError: string | null;
 
-  // ── Selezione (può venire da viewer O da grafico) ─────────
   selectedIds: Set<string>;
   lastSelectionSource: "viewer" | "chart" | null;
 
-  // ── Filtri attivi (dai grafici) ───────────────────────────
   activeFilters: ActiveFilters;
 
-  // ── IDs che passano il filtro (calcolato) ─────────────────
+  // IDs che passano TUTTI i filtri (per viewer 3D e PropertiesPanel)
   filteredIds: string[];
 
-  // ── Azioni ───────────────────────────────────────────────
+  // IDs filtrati escludendo il filtro categorie
+  // → usato da LevelChart per mostrare distribuzione corretta dei livelli
+  filteredIdsExcludeCategories: string[];
+
+  // IDs filtrati escludendo il filtro livelli
+  // → usato da CategoryChart per mostrare distribuzione corretta delle categorie
+  filteredIdsExcludeLevels: string[];
+
   setBimObjects: (objects: BimObject[]) => void;
   setLoading: (loading: boolean) => void;
   setLoadError: (error: string | null) => void;
@@ -55,16 +55,22 @@ interface BimStore {
   setFilter: (key: keyof ActiveFilters, values: string[]) => void;
   clearFilters: () => void;
 
-  // ── Dati derivati (getters) ───────────────────────────────
   getCategories: () => string[];
   getLevels: () => string[];
   getMaterials: () => string[];
   getSelectedObjects: () => BimObject[];
 }
 
-// ── Helper: ricalcola filteredIds ─────────────────────────────
-function computeFilteredIds(objects: BimObject[], filters: ActiveFilters): string[] {
-  const { categories, levels, materials } = filters;
+// Filtra gli oggetti applicando tutti i filtri, opzionalmente escludendo una chiave
+function filterObjects(
+  objects: BimObject[],
+  filters: ActiveFilters,
+  excludeKey?: keyof ActiveFilters
+): string[] {
+  const categories = excludeKey === "categories" ? [] : filters.categories;
+  const levels = excludeKey === "levels" ? [] : filters.levels;
+  const materials = excludeKey === "materials" ? [] : filters.materials;
+
   const noFilter =
     categories.length === 0 && levels.length === 0 && materials.length === 0;
   if (noFilter) return [];
@@ -79,7 +85,14 @@ function computeFilteredIds(objects: BimObject[], filters: ActiveFilters): strin
     .map((o) => o.id);
 }
 
-// ── Store ─────────────────────────────────────────────────────
+function computeAllFiltered(objects: BimObject[], filters: ActiveFilters) {
+  return {
+    filteredIds: filterObjects(objects, filters),
+    filteredIdsExcludeCategories: filterObjects(objects, filters, "categories"),
+    filteredIdsExcludeLevels: filterObjects(objects, filters, "levels"),
+  };
+}
+
 export const useBimStore = create<BimStore>()(
   subscribeWithSelector((set, get) => ({
     bimObjects: [],
@@ -89,6 +102,8 @@ export const useBimStore = create<BimStore>()(
     lastSelectionSource: null,
     activeFilters: { categories: [], levels: [], materials: [] },
     filteredIds: [],
+    filteredIdsExcludeCategories: [],
+    filteredIdsExcludeLevels: [],
 
     setBimObjects: (objects) => set({ bimObjects: objects }),
     setLoading: (loading) => set({ isLoading: loading }),
@@ -109,17 +124,18 @@ export const useBimStore = create<BimStore>()(
 
     setFilter: (key, values) => {
       const filters = { ...get().activeFilters, [key]: values };
-      const filteredIds = computeFilteredIds(get().bimObjects, filters);
-      set({ activeFilters: filters, filteredIds });
+      const computed = computeAllFiltered(get().bimObjects, filters);
+      set({ activeFilters: filters, ...computed });
     },
 
     clearFilters: () =>
       set({
         activeFilters: { categories: [], levels: [], materials: [] },
         filteredIds: [],
+        filteredIdsExcludeCategories: [],
+        filteredIdsExcludeLevels: [],
       }),
 
-    // Getters
     getCategories: () => [...new Set(get().bimObjects.map((o) => o.category))].sort(),
     getLevels: () => [...new Set(get().bimObjects.map((o) => o.level))].sort(),
     getMaterials: () => [...new Set(get().bimObjects.map((o) => o.material))].sort(),
