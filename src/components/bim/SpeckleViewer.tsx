@@ -1,7 +1,4 @@
 // FILE: src/components/bim/SpeckleViewer.tsx
-// MODIFICATO: usa viewer.getObjectProperties() per leggere le
-// proprietà reali (category, level, ecc.) invece di inferirle
-// dal speckle_type — risolve il problema degli istogrammi vuoti.
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useBimStore } from "@/store/bimStore";
@@ -11,17 +8,12 @@ import type { BimObject } from "@/store/bimStore";
 const PROJECT_URL = "https://app.speckle.systems/projects/a0102047d4/models/all";
 const EMBED_TOKEN = "0c70148e6c17a7848184ee9a7947313e5359b3bf70";
 
-// ── Normalizza la categoria leggendo le proprietà reali ───────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function categoryFromProperties(props: Record<string, any>): string {
   const raw =
-    props["category"] ??
-    props["Category"] ??
-    props["ifcType"] ??
-    props["IfcType"] ??
-    props["type"] ??
-    props["Type"] ??
-    "";
+    props["category"] ?? props["Category"] ??
+    props["ifcType"] ?? props["IfcType"] ??
+    props["type"] ?? props["Type"] ?? "";
   if (raw && typeof raw === "string" && raw.trim()) {
     const c = raw.trim();
     const MAP: Record<string, string> = {
@@ -62,16 +54,11 @@ function categoryFromProperties(props: Record<string, any>): string {
   return "Other";
 }
 
-// ── Estrae livello dalle proprietà reali ──────────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function levelFromProperties(props: Record<string, any>): string {
   const candidates = [
-    props["Level"],
-    props["level"],
-    props["Livello"],
-    props["Floor"],
-    props["Storey"],
-    props["BuildingStorey"],
+    props["Level"], props["level"], props["Livello"],
+    props["Floor"], props["Storey"], props["BuildingStorey"],
     props["IfcBuildingStorey"],
   ];
   for (const c of candidates) {
@@ -85,49 +72,171 @@ function levelFromProperties(props: Record<string, any>): string {
   return "Unknown";
 }
 
-// ── Costruisce BimObject da una PropertyInfo di getObjectProperties() ──
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function bimObjectFromPropertyInfo(info: any): BimObject | null {
-  const id = String(info.id ?? "");
+function bimObjectFromRaw(raw: Record<string, any>): BimObject | null {
+  const id = String(raw.id ?? raw.applicationId ?? "");
   if (!id) return null;
 
-  // Appiattisce le proprietà: Speckle può wrappare i valori in { value: ... }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rawProps: Record<string, any> = {};
-  if (info.properties && typeof info.properties === "object") {
-    for (const [k, v] of Object.entries(info.properties)) {
+  const flat: Record<string, any> = { ...raw };
+  if (raw.parameters && typeof raw.parameters === "object") {
+    for (const [k, v] of Object.entries(raw.parameters)) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      rawProps[k] = (v as any)?.value !== undefined ? (v as any).value : v;
+      flat[k] = (v as any)?.value ?? v;
+    }
+  }
+  if (raw.properties && typeof raw.properties === "object") {
+    for (const [k, v] of Object.entries(raw.properties)) {
+      if (!(k in flat)) flat[k] = v;
     }
   }
 
-  const speckleType = String(rawProps["speckle_type"] ?? rawProps["type"] ?? info.type ?? "");
-  const name = String(
-    rawProps["name"] ?? rawProps["Name"] ??
-    rawProps["mark"] ?? rawProps["Mark"] ??
-    id.slice(0, 12)
-  );
-  const category = categoryFromProperties(rawProps);
-  const level = levelFromProperties(rawProps);
+  const speckleType = String(raw.speckle_type ?? raw.type ?? "");
+  const category = categoryFromProperties(flat);
+  const level = levelFromProperties(flat);
   const material = String(
-    rawProps["material"] ?? rawProps["Material"] ??
-    rawProps["MATERIAL_ASSET_PARAM"] ?? rawProps["STRUCTURAL_MATERIAL_PARAM"] ??
-    "Unknown"
+    flat["material"] ?? flat["Material"] ??
+    flat["MATERIAL_ASSET_PARAM"] ?? flat["STRUCTURAL_MATERIAL_PARAM"] ?? "Unknown"
   ).trim();
-  const volume = Number(rawProps["volume"] ?? rawProps["Volume"] ?? rawProps["HOST_VOLUME_COMPUTED"] ?? 0);
-  const area = Number(rawProps["area"] ?? rawProps["Area"] ?? rawProps["HOST_AREA_COMPUTED"] ?? 0);
+  const volume = Number(flat["volume"] ?? flat["Volume"] ?? flat["HOST_VOLUME_COMPUTED"] ?? 0);
+  const area = Number(flat["area"] ?? flat["Area"] ?? flat["HOST_AREA_COMPUTED"] ?? 0);
+  const name = String(flat["name"] ?? flat["Name"] ?? flat["mark"] ?? flat["Mark"] ?? id.slice(0, 12));
 
   return {
-    id,
-    speckleType,
-    category,
-    level,
+    id, speckleType, category, level,
     material: material || "Unknown",
     volume: isNaN(volume) ? 0 : volume,
     area: isNaN(area) ? 0 : area,
-    family: rawProps["family"] ?? rawProps["Family"] ?? undefined,
+    family: flat["family"] ?? flat["Family"] ?? undefined,
     mark: name,
   };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function extractFromViewer(viewer: any, logFn: (msg: string) => void): Promise<BimObject[]> {
+  const objects: BimObject[] = [];
+  const seen = new Set<string>();
+
+  // ── TENTATIVO 1: getObjectProperties() ───────────────────
+  if (typeof viewer.getObjectProperties === "function") {
+    logFn("Trying getObjectProperties()...");
+    try {
+      const props = await viewer.getObjectProperties();
+      console.log(`[BIM] getObjectProperties() → ${props?.length ?? 0} items`);
+
+      if (props && props.length > 0) {
+        for (let i = 0; i < Math.min(3, props.length); i++) {
+          const p = props[i];
+          console.log(`[BIM][getObjProps][${i}] id=${p.id} type=${p.type}`);
+          console.log(`[BIM][getObjProps][${i}] keys:`, Object.keys(p.properties ?? {}).slice(0, 30).join(", "));
+          console.log(`[BIM][getObjProps][${i}] category="${p.properties?.category ?? p.properties?.Category}" level="${p.properties?.Level ?? p.properties?.level}"`);
+          console.log(`[BIM][getObjProps][${i}] FULL properties:`, JSON.stringify(p.properties ?? {}).slice(0, 800));
+        }
+
+        for (const info of props) {
+          const id = String(info.id ?? "");
+          if (!id || seen.has(id)) continue;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const flat: Record<string, any> = { id };
+          if (info.properties) {
+            for (const [k, v] of Object.entries(info.properties)) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              flat[k] = (v as any)?.value !== undefined ? (v as any).value : v;
+            }
+          }
+          flat["speckle_type"] = flat["speckle_type"] ?? info.type ?? "";
+          const obj = bimObjectFromRaw(flat);
+          if (obj) { seen.add(id); objects.push(obj); }
+        }
+
+        if (objects.length > 0) {
+          console.log("[BIM] getObjectProperties() SUCCESS:", objects.length);
+          return objects;
+        }
+        console.warn("[BIM] getObjectProperties() → items ma 0 BimObject costruiti, passo al WorldTree");
+      }
+    } catch (e) {
+      console.warn("[BIM] getObjectProperties() errore:", e);
+    }
+  } else {
+    console.log("[BIM] getObjectProperties() NON disponibile in questa versione del viewer");
+  }
+
+  // ── TENTATIVO 2: WorldTree walk ───────────────────────────
+  logFn("Trying WorldTree walk...");
+  const worldTree = viewer.getWorldTree?.();
+  if (!worldTree) {
+    console.warn("[BIM] getWorldTree() ha restituito null/undefined");
+    return objects;
+  }
+
+  console.log("[BIM] WorldTree instance keys:", Object.keys(worldTree).join(", "));
+  const proto = Object.getPrototypeOf(worldTree);
+  console.log("[BIM] WorldTree prototype methods:", Object.getOwnPropertyNames(proto).join(", "));
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allRaws: Record<string, any>[] = [];
+
+  if (typeof worldTree.walk === "function") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    worldTree.walk((node: any) => {
+      const raw =
+        node?.model?.raw ??
+        node?.raw ??
+        node?.data?.raw ??
+        node?.model ??
+        node;
+      if (raw && (raw.id || raw.applicationId)) allRaws.push(raw);
+      return true;
+    });
+    console.log(`[BIM] walk() → ${allRaws.length} raw objects`);
+  }
+
+  if (allRaws.length === 0 && typeof worldTree.getAllObjects === "function") {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const all: any[] = worldTree.getAllObjects() ?? [];
+    console.log(`[BIM] getAllObjects() → ${all.length}`);
+    for (const o of all) {
+      const raw = o?.raw ?? o?.model?.raw ?? o;
+      if (raw && (raw.id || raw.applicationId)) allRaws.push(raw);
+    }
+  }
+
+  // Log dettagliato dei primi 5 raw per capire la struttura
+  console.log(`[BIM] Totale raw da WorldTree: ${allRaws.length}`);
+  for (let i = 0; i < Math.min(5, allRaws.length); i++) {
+    const r = allRaws[i];
+    console.log(`\n[BIM][raw][${i}] ===`);
+    console.log(`  id: ${r.id ?? r.applicationId}`);
+    console.log(`  speckle_type: ${r.speckle_type}`);
+    console.log(`  ALL keys: ${Object.keys(r).join(", ")}`);
+    console.log(`  category: ${r.category ?? r.Category ?? "(mancante)"}`);
+    console.log(`  level: ${r.level ?? r.Level ?? "(mancante)"}`);
+    console.log(`  FULL JSON (1500 chars): ${JSON.stringify(r).slice(0, 1500)}`);
+  }
+
+  // Distribuzione speckle_type
+  const typeDist: Record<string, number> = {};
+  for (const r of allRaws) {
+    const t = String(r.speckle_type ?? r.type ?? "?");
+    typeDist[t] = (typeDist[t] ?? 0) + 1;
+  }
+  console.log("[BIM] speckle_type distribution:", JSON.stringify(typeDist, null, 2));
+
+  // Converti — accetta TUTTI gli oggetti con id valido
+  for (const raw of allRaws) {
+    const id = String(raw.id ?? raw.applicationId ?? "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    const obj = bimObjectFromRaw(raw);
+    if (obj) objects.push(obj);
+  }
+
+  const catDist: Record<string, number> = {};
+  for (const o of objects) catDist[o.category] = (catDist[o.category] ?? 0) + 1;
+  console.log("[BIM] Category distribution:", JSON.stringify(catDist, null, 2));
+
+  return objects;
 }
 
 export const SpeckleViewer = () => {
@@ -143,7 +252,7 @@ export const SpeckleViewer = () => {
   const [statusLines, setStatusLines] = useState<string[]>([]);
   const log = (msg: string) => {
     console.log(`[SpeckleViewer] ${msg}`);
-    setStatusLines((prev) => [...prev.slice(-4), msg]);
+    setStatusLines((prev) => [...prev.slice(-6), msg]);
   };
 
   const {
@@ -193,61 +302,8 @@ export const SpeckleViewer = () => {
       }
       log("3D model loaded");
 
-      // ── USA getObjectProperties() per estrarre le proprietà reali ──
       log("Extracting BIM metadata...");
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let propertyInfoList: any[] = [];
-
-      if (typeof viewer.getObjectProperties === "function") {
-        // Metodo ufficiale: restituisce PropertyInfo[] con id + properties
-        propertyInfoList = await viewer.getObjectProperties();
-        console.log(`[SpeckleViewer] getObjectProperties() → ${propertyInfoList.length} items`);
-
-        // Log di debug sui primi 3 elementi per capire la struttura
-        for (let i = 0; i < Math.min(3, propertyInfoList.length); i++) {
-          const item = propertyInfoList[i];
-          console.log(`[SpeckleViewer][${i}] id=${item.id}`);
-          console.log(`[SpeckleViewer][${i}] properties keys:`, Object.keys(item.properties ?? {}).join(", "));
-          // Log dei valori di category e level
-          const p = item.properties ?? {};
-          console.log(`[SpeckleViewer][${i}] category="${p.category ?? p.Category}", level="${p.Level ?? p.level}"`);
-        }
-      } else {
-        // Fallback: usa il WorldTree come prima, ma logga un warning
-        console.warn("[SpeckleViewer] getObjectProperties() non disponibile — fallback WorldTree");
-        const worldTree = viewer.getWorldTree();
-        if (typeof worldTree.walk === "function") {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          worldTree.walk((node: any) => {
-            const raw = node?.model?.raw ?? node?.raw;
-            if (raw?.id) {
-              propertyInfoList.push({ id: raw.id, properties: raw, type: raw.speckle_type });
-            }
-            return true;
-          });
-        }
-      }
-
-      // Filtra e converte in BimObject
-      const seen = new Set<string>();
-      const bimObjects: BimObject[] = [];
-
-      for (const info of propertyInfoList) {
-        const obj = bimObjectFromPropertyInfo(info);
-        if (!obj || seen.has(obj.id)) continue;
-        seen.add(obj.id);
-        bimObjects.push(obj);
-      }
-
-      // Debug: distribuzione categorie
-      const catCounts: Record<string, number> = {};
-      for (const o of bimObjects) catCounts[o.category] = (catCounts[o.category] ?? 0) + 1;
-      console.log("[SpeckleViewer] Category distribution:", catCounts);
-
-      const levelSample = [...new Set(bimObjects.map(o => o.level))].slice(0, 10);
-      console.log("[SpeckleViewer] Level sample:", levelSample);
-
+      const bimObjects = await extractFromViewer(viewer, log);
       log(`Extracted ${bimObjects.length} elements`);
 
       if (bimObjects.length === 0) {
