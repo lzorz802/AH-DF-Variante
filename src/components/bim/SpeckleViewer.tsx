@@ -1,11 +1,6 @@
 // ============================================================
 // FILE: src/components/bim/SpeckleViewer.tsx
 // ============================================================
-// STRATEGIA CORRETTA:
-// Il viewer carica il modello → worldTree è già popolato.
-// Leggiamo i dati BIM direttamente dal WorldTree DOPO il load,
-// usando getAllObjects() che è l'API pubblica stabile di v2.
-// ============================================================
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useBimStore } from "@/store/bimStore";
@@ -15,7 +10,6 @@ import type { BimObject } from "@/store/bimStore";
 const PROJECT_URL = "https://app.speckle.systems/projects/a0102047d4/models/all";
 const EMBED_TOKEN = "0c70148e6c17a7848184ee9a7947313e5359b3bf70";
 
-// ── Tipi container da ignorare ───────────────────────────────
 const SKIP_PREFIX = [
   "objects.geometry.",
   "objects.other.rendermaterial",
@@ -48,7 +42,6 @@ function categoryFromType(speckleType: string): string {
   return "Other";
 }
 
-// ── Estrae BimObject dal raw Speckle object ──────────────────
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractFromRaw(raw: Record<string, any>): BimObject | null {
   const id = String(raw.id ?? "");
@@ -91,19 +84,31 @@ function extractFromRaw(raw: Record<string, any>): BimObject | null {
   };
 }
 
-// ── Estrae oggetti BIM dal WorldTree con tutti i metodi noti ─
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractFromWorldTree(worldTree: any): BimObject[] {
   const objects: BimObject[] = [];
   const seen = new Set<string>();
   const allTypes = new Set<string>();
 
-  // METODO A: getAllObjects() — API pubblica di WorldTree v2
   try {
     if (typeof worldTree.getAllObjects === "function") {
       const allObjs = worldTree.getAllObjects();
-      console.log(`[WorldTree] getAllObjects() returned ${allObjs?.length ?? 0} items`);
+
+      // ── LOG DIAGNOSTICO: primi 3 oggetti per vedere la struttura ──
+      console.log("[WorldTree] Total objects from getAllObjects():", allObjs?.length);
+      const sample = (allObjs ?? []).slice(0, 3);
+      for (const obj of sample) {
+        console.log("[WorldTree] Sample object keys:", Object.keys(obj ?? {}));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const raw = (obj as any)?.raw ?? obj;
+        console.log("[WorldTree] Sample raw keys:", Object.keys(raw ?? {}));
+        console.log("[WorldTree] Sample raw.speckle_type:", raw?.speckle_type);
+        console.log("[WorldTree] Sample raw.type:", raw?.type);
+        console.log("[WorldTree] Sample raw (truncated):", JSON.stringify(raw).slice(0, 400));
+      }
+
       for (const obj of (allObjs ?? [])) {
+        // getAllObjects può restituire NodeData o il raw direttamente
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const raw = (obj as any)?.raw ?? obj;
         const t = raw?.speckle_type as string | undefined;
@@ -114,28 +119,23 @@ function extractFromWorldTree(worldTree: any): BimObject[] {
           objects.push(bimObj);
         }
       }
-      if (objects.length > 0) {
-        console.log(`[WorldTree] getAllObjects() → ${objects.length} BIM elements`);
-        return objects;
-      }
+
+      console.log("[WorldTree] All speckle_types:", [...allTypes]);
+      console.log("[WorldTree] BIM elements:", objects.length);
+      if (objects.length > 0) return objects;
     }
   } catch (e) { console.warn("[WorldTree] getAllObjects failed:", e); }
 
-  // METODO B: walk() con callback che riceve TreeNode
-  // In v2.x la firma è walk(callback) dove callback riceve il nodo
-  // e il nodo ha struttura { model: { raw, children, atomic, id } }
+  // walk() fallback
   try {
     if (typeof worldTree.walk === "function") {
-      // Prova prima la firma con nodo root esplicito
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const walk = (node: any) => {
-        // Prova tutte le strutture possibili
+      worldTree.walk((node: any) => {
         const raw =
-          node?.model?.raw ??   // v2 standard
-          node?.raw ??           // v2 alternativa
-          node?.data?.raw ??     // v2 altro
-          (node?.model?.id ? node.model : null); // fallback
-
+          node?.model?.raw ??
+          node?.raw ??
+          node?.data?.raw ??
+          (node?.model?.id ? node.model : null);
         if (raw) {
           const t = raw?.speckle_type as string | undefined;
           if (t) allTypes.add(t);
@@ -145,44 +145,13 @@ function extractFromWorldTree(worldTree: any): BimObject[] {
             objects.push(bimObj);
           }
         }
-        return true; // continua il walk
-      };
-
-      worldTree.walk(walk);
-      console.log(`[WorldTree] walk() → ${objects.length} objects, types: ${[...allTypes].join(", ")}`);
+        return true;
+      });
+      console.log("[WorldTree] walk() types:", [...allTypes]);
       if (objects.length > 0) return objects;
     }
   } catch (e) { console.warn("[WorldTree] walk() failed:", e); }
 
-  // METODO C: accesso diretto all'internal _root o root
-  try {
-    const root = worldTree._root ?? worldTree.root ?? worldTree._tree;
-    if (root) {
-      console.log("[WorldTree] Trying internal root traversal");
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const traverse = (node: any, depth = 0) => {
-        if (depth > 50) return; // safety
-        const raw = node?.model?.raw ?? node?.raw ?? node?.data;
-        if (raw) {
-          const t = raw?.speckle_type as string | undefined;
-          if (t) allTypes.add(t);
-          const bimObj = extractFromRaw(raw);
-          if (bimObj && !seen.has(bimObj.id)) {
-            seen.add(bimObj.id);
-            objects.push(bimObj);
-          }
-        }
-        const children = node?.model?.children ?? node?.children ?? [];
-        for (const child of (Array.isArray(children) ? children : [])) {
-          traverse(child, depth + 1);
-        }
-      };
-      traverse(root);
-      console.log(`[WorldTree] internal traversal → ${objects.length} objects`);
-    }
-  } catch (e) { console.warn("[WorldTree] internal traversal failed:", e); }
-
-  console.log("[WorldTree] All types found:", [...allTypes]);
   return objects;
 }
 
@@ -253,29 +222,16 @@ export const SpeckleViewer = () => {
       }
       log("3D model loaded");
 
-      // ── Estrai BIM data dal WorldTree (già caricato) ─────────
       log("Extracting BIM metadata from WorldTree...");
       const worldTree = viewer.getWorldTree();
-
-      // Debug: mostra tutte le proprietà disponibili sul worldTree
-      console.log("[WorldTree] Available methods:", Object.getOwnPropertyNames(
-        Object.getPrototypeOf(worldTree)
-      ).filter(n => !n.startsWith("_")));
-
       const bimObjects = extractFromWorldTree(worldTree);
       log(`Extracted ${bimObjects.length} elements`);
 
       if (bimObjects.length === 0) {
-        // Ultimo tentativo: usa fetchBimObjects() come fallback HTTP
-        log("WorldTree empty, trying REST API fallback...");
-        const { fetchBimObjects } = await import("@/lib/speckleExtractor");
-        const apiObjects = await fetchBimObjects();
-        setBimObjects(apiObjects);
-        log(`REST API: ${apiObjects.length} elements`);
-      } else {
-        setBimObjects(bimObjects);
+        throw new Error("No elements extracted from WorldTree — check console for types");
       }
 
+      setBimObjects(bimObjects);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[SpeckleViewer] Error:", msg);
@@ -297,19 +253,15 @@ export const SpeckleViewer = () => {
     };
   }, [initViewer]);
 
-  // Filtri → isolamento nel 3D
   useEffect(() => {
     const filtering = filteringExtRef.current;
     if (!filtering) return;
     try {
       filtering.resetFilters();
-      if (filteredIds.length > 0) {
-        filtering.isolateObjects(filteredIds, "filters", false);
-      }
+      if (filteredIds.length > 0) filtering.isolateObjects(filteredIds, "filters", false);
     } catch (e) { console.warn("[SpeckleViewer] Filter error:", e); }
   }, [filteredIds]);
 
-  // Selezione chart → viewer
   useEffect(() => {
     const selection = selectionExtRef.current;
     if (!selection || lastSelectionSource !== "chart") return;
@@ -340,9 +292,7 @@ export const SpeckleViewer = () => {
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1f2e]/95 z-10 p-6">
           <WifiOff className="h-8 w-8 text-red-400 mb-3" />
           <p className="text-sm text-red-300 font-medium text-center mb-2">Failed to load BIM data</p>
-          <p className="text-xs text-slate-400 text-center font-mono bg-slate-800/80 px-3 py-2 rounded max-w-sm break-all">
-            {loadError}
-          </p>
+          <p className="text-xs text-slate-400 text-center font-mono bg-slate-800/80 px-3 py-2 rounded max-w-sm break-all">{loadError}</p>
           <button
             onClick={() => { isInitialized.current = false; setLoadError(null); setLoading(true); initViewer(); }}
             className="mt-4 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium"
@@ -354,7 +304,7 @@ export const SpeckleViewer = () => {
 
       <div className="absolute top-3 right-3 z-10">
         <button onClick={handleReset}
-          className="p-2 rounded-lg bg-black/40 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-all">
+          className="p-2 rounded-lg bg-black/40 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white">
           <RotateCcw className="h-4 w-4" />
         </button>
       </div>
