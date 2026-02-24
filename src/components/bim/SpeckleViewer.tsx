@@ -1,6 +1,4 @@
-// ============================================================
 // FILE: src/components/bim/SpeckleViewer.tsx
-// ============================================================
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useBimStore } from "@/store/bimStore";
@@ -10,22 +8,24 @@ import type { BimObject } from "@/store/bimStore";
 const PROJECT_URL = "https://app.speckle.systems/projects/a0102047d4/models/all";
 const EMBED_TOKEN = "0c70148e6c17a7848184ee9a7947313e5359b3bf70";
 
+// ── Tipi da escludere sempre (pura geometria / materiali) ────
+const SKIP_EXACT = new Set(["base", "reference"]);
 const SKIP_PREFIX = [
   "objects.geometry.",
   "objects.other.rendermaterial",
   "objects.other.displaystyle",
-  "objects.other.collection",
   "objects.primitive.",
 ];
-const SKIP_EXACT = new Set(["base", "reference"]);
-
 function shouldSkip(t: string): boolean {
   const tl = t.toLowerCase();
   return SKIP_EXACT.has(tl) || SKIP_PREFIX.some((p) => tl.startsWith(p));
 }
 
+// ── Categoria: copre BIM classico + GIS/Civil/IFC ────────────
 function categoryFromType(speckleType: string): string {
   const s = speckleType.toLowerCase();
+
+  // Objects.BuiltElements.*
   if (s.includes("wall")) return "Wall";
   if (s.includes("floor") || s.includes("slab")) return "Floor";
   if (s.includes("column")) return "Column";
@@ -38,81 +38,151 @@ function categoryFromType(speckleType: string): string {
   if (s.includes("furniture")) return "Furniture";
   if (s.includes("railing")) return "Railing";
   if (s.includes("pipe") || s.includes("duct")) return "MEP";
-  if (s.includes("site") || s.includes("terrain")) return "Site";
+  if (s.includes("site") || s.includes("terrain") || s.includes("topography")) return "Site";
+
+  // Civil / GIS / Infrastructure
+  if (s.includes("road") || s.includes("alignment") || s.includes("corridor")) return "Road";
+  if (s.includes("bridge")) return "Bridge";
+  if (s.includes("tunnel")) return "Tunnel";
+  if (s.includes("structure")) return "Structure";
+  if (s.includes("network") || s.includes("pipe") || s.includes("utility")) return "Utility";
+  if (s.includes("land") || s.includes("parcel") || s.includes("plot")) return "Land";
+  if (s.includes("vegetation") || s.includes("tree") || s.includes("plant")) return "Vegetation";
+  if (s.includes("water") || s.includes("river") || s.includes("lake")) return "Water";
+  if (s.includes("building") || s.includes("mass")) return "Building";
+
+  // Prende il segmento finale del tipo come categoria fallback
+  // es. "Objects.GIS.PolygonElement" → "PolygonElement"
+  const parts = speckleType.split(".");
+  if (parts.length > 1) {
+    const last = parts[parts.length - 1];
+    if (last && last.length > 2 && last !== "Base") return last;
+  }
+
   return "Other";
+}
+
+// ── Estrae il livello/piano da un raw object ─────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractLevel(raw: Record<string, any>): string {
+  // Prova vari percorsi comuni
+  const candidates = [
+    raw.level?.name,
+    raw.level,
+    raw["Level"]?.name,
+    raw["Level"],
+    raw.storey,
+    raw["Storey"],
+    raw.floor,
+    raw["Floor"],
+    raw.elevation,
+    raw["Elevation"],
+    raw.properties?.level,
+    raw.properties?.Level,
+    raw.properties?.["IfcBuildingStorey"],
+    raw["@Level"],
+  ];
+
+  for (const c of candidates) {
+    if (c && typeof c === "string" && c.trim()) return c.trim();
+    if (c && typeof c === "object" && c.name) return String(c.name).trim();
+    if (c && typeof c === "number") return `Level ${c}`;
+  }
+
+  // Cerca nei parameters Revit
+  const params = raw.parameters as Record<string, Record<string, unknown>> | undefined;
+  if (params) {
+    const levelKeys = [
+      "SCHEDULE_LEVEL_PARAM", "FAMILY_LEVEL_PARAM",
+      "INSTANCE_REFERENCE_LEVEL_PARAM", "LEVEL_PARAM"
+    ];
+    for (const key of levelKeys) {
+      const val = params[key]?.value;
+      if (val && typeof val === "string" && val.trim()) return val.trim();
+    }
+  }
+
+  return "Unknown";
+}
+
+// ── Estrae il materiale ───────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractMaterial(raw: Record<string, any>): string {
+  const params = raw.parameters as Record<string, Record<string, unknown>> | undefined;
+  const pv = (key: string) => params?.[key]?.value;
+
+  const candidates = [
+    pv("MATERIAL_ASSET_PARAM"),
+    pv("ALL_MODEL_MATERIAL_NAME"),
+    pv("STRUCTURAL_MATERIAL_PARAM"),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (raw.materials as any[])?.[0]?.name,
+    raw.material,
+    raw["Material"],
+    raw.properties?.material,
+    raw.properties?.Material,
+  ];
+
+  for (const c of candidates) {
+    if (c && typeof c === "string" && c.trim() && c !== "Unknown") return c.trim();
+  }
+  return "Unknown";
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractFromRaw(raw: Record<string, any>): BimObject | null {
-  const id = String(raw.id ?? "");
-  const speckleType = String(raw.speckle_type ?? "");
+  const id = String(raw.id ?? raw.applicationId ?? "");
+  const speckleType = String(raw.speckle_type ?? raw.type ?? "");
   if (!id || !speckleType || shouldSkip(speckleType)) return null;
 
-  const lvl = raw.level;
-  const levelName =
-    lvl && typeof lvl === "object"
-      ? String(lvl.name ?? lvl.elevation ?? "Unknown")
-      : String(lvl ?? "Unknown");
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const params = raw.parameters as Record<string, any> | undefined;
+  const params = raw.parameters as Record<string, Record<string, unknown>> | undefined;
   const pv = (key: string) => params?.[key]?.value;
-
-  const material = String(
-    pv("MATERIAL_ASSET_PARAM") ??
-    pv("ALL_MODEL_MATERIAL_NAME") ??
-    pv("STRUCTURAL_MATERIAL_PARAM") ??
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (raw.materials as any[])?.[0]?.name ??
-    raw.material ??
-    "Unknown"
-  ).trim();
-
-  const volume = Number(pv("HOST_VOLUME_COMPUTED") ?? pv("VOLUME") ?? raw.volume ?? 0);
-  const area = Number(pv("HOST_AREA_COMPUTED") ?? pv("AREA") ?? raw.area ?? 0);
+  const volume = Number(pv?.("HOST_VOLUME_COMPUTED") ?? pv?.("VOLUME") ?? raw.volume ?? 0);
+  const area = Number(pv?.("HOST_AREA_COMPUTED") ?? pv?.("AREA") ?? raw.area ?? raw.baseArea ?? 0);
 
   return {
     id,
     speckleType,
     category: categoryFromType(speckleType),
-    level: levelName.trim() || "Unknown",
-    material: material || "Unknown",
+    level: extractLevel(raw),
+    material: extractMaterial(raw),
     volume: isNaN(volume) ? 0 : volume,
     area: isNaN(area) ? 0 : area,
     family: raw.family as string | undefined,
-    mark: (raw.mark ?? raw["Mark"]) as string | undefined,
+    mark: (raw.mark ?? raw["Mark"] ?? raw.name ?? raw["Name"]) as string | undefined,
   };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractFromWorldTree(worldTree: any): BimObject[] {
+function extractFromWorldTree(worldTree: any, logSample: boolean): BimObject[] {
   const objects: BimObject[] = [];
   const seen = new Set<string>();
-  const allTypes = new Set<string>();
+  const typeCounts: Record<string, number> = {};
 
   try {
     if (typeof worldTree.getAllObjects === "function") {
-      const allObjs = worldTree.getAllObjects();
+      const allObjs = worldTree.getAllObjects() ?? [];
+      console.log(`[WorldTree] getAllObjects() → ${allObjs.length} items`);
 
-      // ── LOG DIAGNOSTICO: primi 3 oggetti per vedere la struttura ──
-      console.log("[WorldTree] Total objects from getAllObjects():", allObjs?.length);
-      const sample = (allObjs ?? []).slice(0, 3);
-      for (const obj of sample) {
-        console.log("[WorldTree] Sample object keys:", Object.keys(obj ?? {}));
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const raw = (obj as any)?.raw ?? obj;
-        console.log("[WorldTree] Sample raw keys:", Object.keys(raw ?? {}));
-        console.log("[WorldTree] Sample raw.speckle_type:", raw?.speckle_type);
-        console.log("[WorldTree] Sample raw.type:", raw?.type);
-        console.log("[WorldTree] Sample raw (truncated):", JSON.stringify(raw).slice(0, 400));
+      // Log struttura completa dei primi 5 oggetti
+      if (logSample) {
+        for (let i = 0; i < Math.min(5, allObjs.length); i++) {
+          const obj = allObjs[i];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const raw = (obj as any)?.raw ?? obj;
+          console.log(`[WorldTree][${i}] speckle_type="${raw?.speckle_type}", type="${raw?.type}"`);
+          console.log(`[WorldTree][${i}] keys:`, Object.keys(raw ?? {}).join(", "));
+          console.log(`[WorldTree][${i}] level:`, raw?.level, "| Level:", raw?.Level);
+          console.log(`[WorldTree][${i}] full raw:`, JSON.stringify(raw).slice(0, 600));
+        }
       }
 
-      for (const obj of (allObjs ?? [])) {
-        // getAllObjects può restituire NodeData o il raw direttamente
+      for (const obj of allObjs) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const raw = (obj as any)?.raw ?? obj;
-        const t = raw?.speckle_type as string | undefined;
-        if (t) allTypes.add(t);
+        const t = String(raw?.speckle_type ?? raw?.type ?? "");
+        if (t) typeCounts[t] = (typeCounts[t] ?? 0) + 1;
+
         const bimObj = extractFromRaw(raw ?? {});
         if (bimObj && !seen.has(bimObj.id)) {
           seen.add(bimObj.id);
@@ -120,35 +190,38 @@ function extractFromWorldTree(worldTree: any): BimObject[] {
         }
       }
 
-      console.log("[WorldTree] All speckle_types:", [...allTypes]);
-      console.log("[WorldTree] BIM elements:", objects.length);
+      console.log("[WorldTree] Type distribution:", typeCounts);
+
+      const catCounts: Record<string, number> = {};
+      for (const o of objects) catCounts[o.category] = (catCounts[o.category] ?? 0) + 1;
+      console.log("[WorldTree] Category distribution:", catCounts);
+
+      const levelSample = [...new Set(objects.map(o => o.level))].slice(0, 10);
+      console.log("[WorldTree] Level sample:", levelSample);
+
       if (objects.length > 0) return objects;
     }
-  } catch (e) { console.warn("[WorldTree] getAllObjects failed:", e); }
+  } catch (e) {
+    console.warn("[WorldTree] getAllObjects failed:", e);
+  }
 
   // walk() fallback
   try {
     if (typeof worldTree.walk === "function") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       worldTree.walk((node: any) => {
-        const raw =
-          node?.model?.raw ??
-          node?.raw ??
-          node?.data?.raw ??
-          (node?.model?.id ? node.model : null);
-        if (raw) {
-          const t = raw?.speckle_type as string | undefined;
-          if (t) allTypes.add(t);
-          const bimObj = extractFromRaw(raw);
-          if (bimObj && !seen.has(bimObj.id)) {
-            seen.add(bimObj.id);
-            objects.push(bimObj);
-          }
+        const raw = node?.model?.raw ?? node?.raw ?? node?.data?.raw;
+        if (!raw) return true;
+        const t = String(raw?.speckle_type ?? "");
+        if (t) typeCounts[t] = (typeCounts[t] ?? 0) + 1;
+        const bimObj = extractFromRaw(raw);
+        if (bimObj && !seen.has(bimObj.id)) {
+          seen.add(bimObj.id);
+          objects.push(bimObj);
         }
         return true;
       });
-      console.log("[WorldTree] walk() types:", [...allTypes]);
-      if (objects.length > 0) return objects;
+      console.log("[WorldTree] walk() types:", typeCounts);
     }
   } catch (e) { console.warn("[WorldTree] walk() failed:", e); }
 
@@ -190,12 +263,8 @@ export const SpeckleViewer = () => {
         CameraController, SelectionExtension, FilteringExtension,
       } = speckle;
 
-      if (!Viewer) throw new Error("@speckle/viewer not loaded");
-
       const viewer = new Viewer(containerRef.current, {
-        ...DefaultViewerParams,
-        showStats: false,
-        verbose: false,
+        ...DefaultViewerParams, showStats: false, verbose: false,
       });
       await viewer.init();
       viewerRef.current = viewer;
@@ -222,19 +291,18 @@ export const SpeckleViewer = () => {
       }
       log("3D model loaded");
 
-      log("Extracting BIM metadata from WorldTree...");
+      log("Extracting BIM metadata...");
       const worldTree = viewer.getWorldTree();
-      const bimObjects = extractFromWorldTree(worldTree);
+      const bimObjects = extractFromWorldTree(worldTree, true);
       log(`Extracted ${bimObjects.length} elements`);
 
       if (bimObjects.length === 0) {
-        throw new Error("No elements extracted from WorldTree — check console for types");
+        throw new Error("0 elements extracted — check browser console for [WorldTree] logs");
       }
 
       setBimObjects(bimObjects);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error("[SpeckleViewer] Error:", msg);
       setLoadError(msg);
       log(`Error: ${msg}`);
     } finally {
@@ -292,11 +360,9 @@ export const SpeckleViewer = () => {
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1f2e]/95 z-10 p-6">
           <WifiOff className="h-8 w-8 text-red-400 mb-3" />
           <p className="text-sm text-red-300 font-medium text-center mb-2">Failed to load BIM data</p>
-          <p className="text-xs text-slate-400 text-center font-mono bg-slate-800/80 px-3 py-2 rounded max-w-sm break-all">{loadError}</p>
-          <button
-            onClick={() => { isInitialized.current = false; setLoadError(null); setLoading(true); initViewer(); }}
-            className="mt-4 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium"
-          >
+          <p className="text-xs text-slate-400 font-mono bg-slate-800/80 px-3 py-2 rounded max-w-sm break-all">{loadError}</p>
+          <button onClick={() => { isInitialized.current = false; setLoadError(null); setLoading(true); initViewer(); }}
+            className="mt-4 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium">
             Retry
           </button>
         </div>
