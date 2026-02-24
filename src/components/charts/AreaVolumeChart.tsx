@@ -1,6 +1,4 @@
 // FILE: src/components/charts/AreaVolumeChart.tsx
-// Grafico area/volume aggregato in MACRO-CATEGORIE.
-// Mapping pensato per modelli civili/GIS/IFC misti.
 
 import { useMemo, useCallback, useState } from "react";
 import {
@@ -10,12 +8,11 @@ import {
 import { useBimStore } from "@/store/bimStore";
 import { X } from "lucide-react";
 
-// ── Macro-categorie e loro colori ─────────────────────────────
 const MACRO_GROUPS: Record<string, { label: string; color: string; categories: string[] }> = {
   infrastrutture: {
     label: "Infrastrutture",
     color: "#f59e0b",
-    categories: ["Road", "Bridge", "Tunnel", "Utility", "Network", "Railway", "Road"],
+    categories: ["Road", "Bridge", "Tunnel", "Railway", "Utility", "Network"],
   },
   edifici: {
     label: "Edifici",
@@ -35,26 +32,25 @@ const MACRO_GROUPS: Record<string, { label: string; color: string; categories: s
   territorio: {
     label: "Territorio",
     color: "#16a34a",
-    categories: ["Site", "Land", "Terrain", "Topography", "Water", "Vegetation"],
+    categories: ["Site", "Land", "Vegetation", "Water"],
   },
   arredo: {
     label: "Arredo/Segnaletica",
     color: "#8b5cf6",
-    categories: ["Furniture", "Generic", "IFC-Other", "IfcSign", "Sign"],
+    categories: ["Furniture", "Generic", "IFC-Other", "Sign"],
   },
   spazi: {
     label: "Spazi",
     color: "#0ea5e9",
-    categories: ["Room", "Space"],
+    categories: ["Room"],
   },
   altro: {
     label: "Altro",
     color: "#475569",
-    categories: [], // catch-all
+    categories: [],
   },
 };
 
-// Mappa ogni categoria al proprio gruppo
 function getMacroGroup(category: string): string {
   const cat = category.toLowerCase();
   for (const [key, group] of Object.entries(MACRO_GROUPS)) {
@@ -63,22 +59,21 @@ function getMacroGroup(category: string): string {
       if (cat === c.toLowerCase() || cat.includes(c.toLowerCase())) return key;
     }
   }
-  // Fallback: cerca per keyword nel nome categoria
   if (cat.includes("road") || cat.includes("bridge") || cat.includes("tunnel") ||
       cat.includes("railway") || cat.includes("utility") || cat.includes("pavement") ||
       cat.includes("carriageway") || cat.includes("lane") || cat.includes("kerb") ||
-      cat.includes("marking") || cat.includes("barrier") || cat.includes("guardrail")) return "infrastrutture";
+      cat.includes("marking") || cat.includes("barrier") || cat.includes("guardrail") ||
+      cat.includes("track")) return "infrastrutture";
   if (cat.includes("wall") || cat.includes("floor") || cat.includes("slab") ||
       cat.includes("column") || cat.includes("beam") || cat.includes("roof") ||
       cat.includes("build") || cat.includes("stair") || cat.includes("ceil") ||
       cat.includes("railing") || cat.includes("framing")) return "edifici";
   if (cat.includes("window") || cat.includes("door")) return "aperture";
   if (cat.includes("pipe") || cat.includes("duct") || cat.includes("mep") ||
-      cat.includes("cable") || cat.includes("conduit")) return "impianti";
+      cat.includes("cable") || cat.includes("conduit") || cat.includes("flow")) return "impianti";
   if (cat.includes("site") || cat.includes("land") || cat.includes("terrain") ||
       cat.includes("topograph") || cat.includes("water") || cat.includes("river") ||
       cat.includes("tree") || cat.includes("vegetation") || cat.includes("plant") ||
-      cat.includes("green") || cat.includes("soil") || cat.includes("earth") ||
       cat.includes("polygon") || cat.includes("parcel")) return "territorio";
   if (cat.includes("sign") || cat.includes("furniture") || cat.includes("equipment") ||
       cat.includes("generic") || cat.includes("ifc-other")) return "arredo";
@@ -86,40 +81,63 @@ function getMacroGroup(category: string): string {
   return "altro";
 }
 
-type Metric = "area" | "volume" | "count";
+type Metric = "count" | "area" | "volume";
+
+function fmtShort(v: number): string {
+  if (v === 0) return "0";
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}k`;
+  return `${v.toFixed(0)}`;
+}
+function fmtLong(v: number, unit: string): string {
+  if (v === 0) return "—";
+  if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(2)}M ${unit}`;
+  if (v >= 1_000) return `${(v / 1_000).toFixed(1)}k ${unit}`;
+  return `${v.toFixed(1)} ${unit}`;
+}
 
 const CustomTooltip = ({
-  active, payload,
+  active, payload, metric,
 }: {
   active?: boolean;
-  payload?: Array<{ payload: { label: string; area: number; volume: number; count: number; categories: string[] } }>;
+  metric: Metric;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  payload?: Array<{ payload: any }>;
 }) => {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs shadow-xl min-w-[160px]">
+    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs shadow-xl min-w-[170px]">
       <p className="font-semibold text-white mb-1.5">{d.label}</p>
       <p className="text-gray-300 mb-1">{d.count} elementi</p>
-      {d.area > 0 && <p className="text-blue-300">{d.area >= 1000 ? (d.area / 1000).toFixed(1) + "k" : d.area.toFixed(0)} m²</p>}
-      {d.volume > 0 && <p className="text-purple-300">{d.volume >= 1000 ? (d.volume / 1000).toFixed(1) + "k" : d.volume.toFixed(0)} m³</p>}
+      {metric === "area" && (
+        <p className={d.area > 0 ? "text-blue-300" : "text-gray-600"}>
+          {d.area > 0 ? fmtLong(d.area, "m²") : "Area non disponibile"}
+        </p>
+      )}
+      {metric === "volume" && (
+        <p className={d.volume > 0 ? "text-purple-300" : "text-gray-600"}>
+          {d.volume > 0 ? fmtLong(d.volume, "m³") : "Volume non disponibile"}
+        </p>
+      )}
       {d.categories.length > 0 && (
-        <p className="text-gray-600 mt-1.5 text-[9px] leading-tight">{d.categories.slice(0, 6).join(", ")}{d.categories.length > 6 ? "…" : ""}</p>
+        <p className="text-gray-600 mt-1.5 text-[9px] leading-tight">
+          {d.categories.slice(0, 6).join(", ")}{d.categories.length > 6 ? "…" : ""}
+        </p>
       )}
     </div>
   );
 };
 
 export const AreaVolumeChart = () => {
-  const { bimObjects, selectedIds, activeFilters, setFilter, setSelectedIds } = useBimStore();
+  const { bimObjects, activeFilters, setFilter, setSelectedIds } = useBimStore();
   const [metric, setMetric] = useState<Metric>("count");
 
-  // Aggrega per macro-categoria
   const data = useMemo(() => {
     const map = new Map<string, {
       area: number; volume: number; count: number;
       ids: string[]; categorySet: Set<string>;
     }>();
-
     for (const obj of bimObjects) {
       const macroKey = getMacroGroup(obj.category);
       const prev = map.get(macroKey) ?? { area: 0, volume: 0, count: 0, ids: [], categorySet: new Set() };
@@ -130,14 +148,13 @@ export const AreaVolumeChart = () => {
       prev.categorySet.add(obj.category);
       map.set(macroKey, prev);
     }
-
     return [...map.entries()]
       .map(([key, v]) => ({
         key,
         label: MACRO_GROUPS[key]?.label ?? key,
         color: MACRO_GROUPS[key]?.color ?? "#94a3b8",
-        area: v.area,
-        volume: v.volume,
+        area: Math.round(v.area),
+        volume: Math.round(v.volume),
         count: v.count,
         ids: v.ids,
         categories: [...v.categorySet].sort(),
@@ -150,36 +167,32 @@ export const AreaVolumeChart = () => {
       });
   }, [bimObjects, metric]);
 
-  // Le categorie Speckle che appartengono ai macro-gruppi attivi
+  // La metrica corrente ha almeno un valore > 0?
+  const hasMetricData = useMemo(() => {
+    if (metric === "count") return true;
+    return data.some((d) => (metric === "area" ? d.area : d.volume) > 0);
+  }, [data, metric]);
+
+  // Metrica effettiva da mostrare (fallback a count se non ci sono dati)
+  const effectiveDataKey = !hasMetricData ? "count" : metric;
+
   const activeMacroKeys = useMemo(() => {
-    // Ricava quali macro-gruppi sono attivi guardando le categorie nel filtro
     if (activeFilters.categories.length === 0) return [];
-    const active = new Set<string>();
-    for (const cat of activeFilters.categories) {
-      active.add(getMacroGroup(cat));
-    }
-    return [...active];
+    return [...new Set(activeFilters.categories.map(getMacroGroup))];
   }, [activeFilters.categories]);
 
   const handleBarClick = useCallback(
     (entry: { key: string; ids: string[]; categories: string[] }) => {
       const isActive = activeMacroKeys.includes(entry.key);
-
       if (isActive) {
-        // Deseleziona questo macro-gruppo: rimuovi le sue categorie dai filtri
-        const nextCats = activeFilters.categories.filter(
-          (c) => getMacroGroup(c) !== entry.key
-        );
+        const nextCats = activeFilters.categories.filter((c) => getMacroGroup(c) !== entry.key);
         setFilter("categories", nextCats);
         if (nextCats.length === 0) setSelectedIds([], "chart");
         else {
-          const ids = bimObjects
-            .filter((o) => nextCats.includes(o.category))
-            .map((o) => o.id);
+          const ids = bimObjects.filter((o) => nextCats.includes(o.category)).map((o) => o.id);
           setSelectedIds(ids, "chart");
         }
       } else {
-        // Attiva: aggiungi tutte le categorie di questo macro-gruppo
         const newCats = [...new Set([...activeFilters.categories, ...entry.categories])];
         setFilter("categories", newCats);
         setSelectedIds(entry.ids, "chart");
@@ -195,10 +208,6 @@ export const AreaVolumeChart = () => {
     return entry.color;
   };
 
-  const formatValue = (v: number) =>
-    v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0);
-
-  const dataKey = metric === "area" ? "area" : metric === "volume" ? "volume" : "count";
   const unit = metric === "area" ? " m²" : metric === "volume" ? " m³" : "";
 
   return (
@@ -218,7 +227,6 @@ export const AreaVolumeChart = () => {
               <X className="h-3 w-3" /> Reset
             </button>
           )}
-          {/* Toggle metrica */}
           <div className="flex rounded-md overflow-hidden border border-gray-700 text-[10px]">
             {(["count", "area", "volume"] as Metric[]).map((m) => (
               <button
@@ -239,13 +247,20 @@ export const AreaVolumeChart = () => {
         </div>
       </div>
 
+      {/* Avviso dati non disponibili */}
+      {!hasMetricData && (
+        <div className="mb-1.5 px-2 py-1 rounded bg-gray-800/50 text-[10px] text-gray-500 text-center">
+          {metric === "area" ? "Aree" : "Volumi"} non disponibili in questo modello
+        </div>
+      )}
+
       {/* Chart */}
       <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
             layout="vertical"
-            margin={{ top: 0, right: 50, left: 0, bottom: 0 }}
+            margin={{ top: 0, right: 55, left: 0, bottom: 0 }}
             onClick={(e) => {
               if (e?.activePayload?.[0]) {
                 handleBarClick(e.activePayload[0].payload as { key: string; ids: string[]; categories: string[] });
@@ -258,24 +273,24 @@ export const AreaVolumeChart = () => {
               tick={{ fill: "#64748b", fontSize: 9 }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={formatValue}
+              tickFormatter={fmtShort}
             />
             <YAxis
               type="category"
               dataKey="label"
-              width={90}
+              width={95}
               tick={{ fill: "#94a3b8", fontSize: 10 }}
               axisLine={false}
               tickLine={false}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+            <Tooltip content={<CustomTooltip metric={metric} />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
             <Bar
-              dataKey={dataKey}
+              dataKey={effectiveDataKey}
               radius={[0, 4, 4, 0]}
               cursor="pointer"
               label={{
                 position: "right",
-                formatter: (v: number) => v > 0 ? `${formatValue(v)}${unit}` : "",
+                formatter: (v: number) => v > 0 ? `${fmtShort(v)}${unit}` : "",
                 fill: "#475569",
                 fontSize: 9,
               }}
