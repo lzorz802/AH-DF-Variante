@@ -9,18 +9,24 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  // Fix per @speckle/viewer: impedisce la minificazione dei nomi di classe
+  // che causa "Could not get Extension of type $h/$l"
+  optimizeDeps: {
+    exclude: ["@speckle/viewer", "@speckle/shared"],
+    esbuildOptions: {
+      // Disabilita il mangling dei nomi anche durante il pre-bundling esbuild
+      minifyIdentifiers: false,
+    },
+  },
   build: {
     rollupOptions: {
       output: {
-        // Impedisce a Rollup di rinominare le classi interne di @speckle/viewer
-        // che causano il bug "Could not get Extension of type $h"
         mangleExports: false,
       },
     },
   },
-  optimizeDeps: {
-    // Esclude @speckle/viewer dal pre-bundling di Vite
-    // per evitare la minificazione dei nomi di classe
-    exclude: ["@speckle/viewer", "@speckle/shared"],
+  esbuild: {
+    // Disabilita il mangling degli identificatori anche in dev mode
+    minifyIdentifiers: false,
   },
 });
