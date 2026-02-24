@@ -1,79 +1,21 @@
 // ============================================================
 // FILE: src/components/bim/SpeckleViewer.tsx
-// Fix: isolateObjects con false = nascondi resto (non xray)
+// ============================================================
+// STRATEGIA:
+// 1. Il viewer 3D carica il modello da Speckle normalmente (iframe-like).
+// 2. I dati BIM (categorie, livelli, ecc.) vengono caricati in PARALLELO
+//    tramite la REST API di Speckle (fetchBimObjects) — SOLO dati reali.
+// 3. NON si usa worldTree.walk() per estrarre metadati (fragile).
+// 4. NON si usa mock data in nessun caso.
 // ============================================================
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useBimStore } from "@/store/bimStore";
-import { Loader2, AlertCircle, RotateCcw } from "lucide-react";
-import type { BimObject } from "@/store/bimStore";
+import { Loader2, AlertCircle, RotateCcw, WifiOff } from "lucide-react";
+import { fetchBimObjects } from "@/lib/speckleExtractor";
 
 const PROJECT_URL = "https://app.speckle.systems/projects/a0102047d4/models/all";
 const EMBED_TOKEN = "0c70148e6c17a7848184ee9a7947313e5359b3bf70";
-
-const CONTAINER_TYPES = new Set([
-  "objects.other.collection","base","objects.geometry.mesh",
-  "objects.geometry.brep","objects.geometry.curve","objects.geometry.line",
-  "objects.geometry.point","objects.geometry.polyline","objects.geometry.polycurve",
-]);
-
-function categoryFromType(t: string): string {
-  const s = t.toLowerCase();
-  if (s.includes("wall")) return "Wall";
-  if (s.includes("floor") || s.includes("slab")) return "Floor";
-  if (s.includes("column")) return "Column";
-  if (s.includes("beam")) return "Beam";
-  if (s.includes("roof")) return "Roof";
-  if (s.includes("window")) return "Window";
-  if (s.includes("door")) return "Door";
-  if (s.includes("stair")) return "Stair";
-  if (s.includes("ceiling")) return "Ceiling";
-  if (s.includes("furniture")) return "Furniture";
-  if (s.includes("railing")) return "Railing";
-  if (s.includes("pipe") || s.includes("duct")) return "MEP";
-  if (s.includes("site") || s.includes("terrain")) return "Site";
-  return "Other";
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractBimObjects(worldTree: any): BimObject[] {
-  const objects: BimObject[] = [];
-  const seen = new Set<string>();
-  try {
-    worldTree.walk((node: Record<string, unknown>) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const raw = (node as any)?.model?.raw;
-      if (!raw?.id || !raw?.speckle_type) return true;
-      const id = String(raw.id);
-      if (seen.has(id)) return true;
-      const speckleType = String(raw.speckle_type);
-      const typeLower = speckleType.toLowerCase();
-      if (CONTAINER_TYPES.has(typeLower)) return true;
-      if (!typeLower.includes("objects.builtelements") && !typeLower.includes("objects.revit") && !typeLower.includes("ifc")) return true;
-      seen.add(id);
-      const levelRaw = raw.level;
-      const levelName = typeof levelRaw === "object" && levelRaw !== null ? (levelRaw as Record<string,unknown>).name : levelRaw;
-      const params = raw.parameters as Record<string, Record<string, unknown>> | undefined;
-      const matParam = params?.["MATERIAL_ASSET_PARAM"]?.value ?? params?.["ALL_MODEL_MATERIAL_NAME"]?.value;
-      const matsRaw = raw.materials as Array<Record<string, unknown>> | undefined;
-      const material = String(matParam || (matsRaw?.[0]?.name) || raw.material || "Unknown").trim();
-      const volume = Number(params?.["HOST_VOLUME_COMPUTED"]?.value ?? raw.volume ?? 0);
-      const area = Number(params?.["HOST_AREA_COMPUTED"]?.value ?? raw.area ?? 0);
-      objects.push({
-        id, speckleType,
-        category: categoryFromType(speckleType),
-        level: String(levelName || "Unknown").trim() || "Unknown",
-        material: material || "Unknown",
-        volume: isNaN(volume) ? 0 : volume,
-        area: isNaN(area) ? 0 : area,
-        family: raw.family as string | undefined,
-        mark: (raw.mark ?? raw["Mark"]) as string | undefined,
-      });
-      return true;
-    });
-  } catch (e) { console.warn("Tree walk error:", e); }
-  return objects;
-}
 
 export const SpeckleViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -84,66 +26,123 @@ export const SpeckleViewer = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const selectionExtRef = useRef<any>(null);
   const isInitialized = useRef(false);
-  const [debugLines, setDebugLines] = useState<string[]>([]);
-  const log = (msg: string) => setDebugLines((prev) => [...prev.slice(-4), msg]);
 
-  const { setSelectedIds, setLoading, setLoadError, setBimObjects, isLoading, loadError, filteredIds, selectedIds, lastSelectionSource } = useBimStore();
+  const [statusLines, setStatusLines] = useState<string[]>([]);
+  const log = (msg: string) => {
+    console.log(`[SpeckleViewer] ${msg}`);
+    setStatusLines((prev) => [...prev.slice(-3), msg]);
+  };
 
+  const {
+    setSelectedIds,
+    setLoading,
+    setLoadError,
+    setBimObjects,
+    isLoading,
+    loadError,
+    filteredIds,
+    selectedIds,
+    lastSelectionSource,
+  } = useBimStore();
+
+  // ── Carica dati BIM reali via REST API ──────────────────────
+  const loadBimData = useCallback(async () => {
+    log("Fetching BIM metadata from Speckle API...");
+    try {
+      const objects = await fetchBimObjects();
+      setBimObjects(objects);
+      log(`Loaded ${objects.length} BIM elements`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error("[SpeckleViewer] BIM data fetch failed:", msg);
+      setLoadError(msg);
+      log(`Error: ${msg}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [setBimObjects, setLoadError, setLoading]);
+
+  // ── Inizializza il viewer 3D ─────────────────────────────────
   const initViewer = useCallback(async () => {
     if (!containerRef.current || isInitialized.current) return;
     isInitialized.current = true;
     setLoading(true);
     setLoadError(null);
+
     try {
       const speckle = await import(/* @vite-ignore */ "@speckle/viewer");
-      const { Viewer, DefaultViewerParams, ViewerEvent, SpeckleLoader, UrlHelper, CameraController, SelectionExtension, FilteringExtension } = speckle;
-      if (!Viewer) throw new Error("@speckle/viewer non caricato");
-      const viewer = new Viewer(containerRef.current, { ...DefaultViewerParams, showStats: false, verbose: false });
+      const {
+        Viewer,
+        DefaultViewerParams,
+        ViewerEvent,
+        SpeckleLoader,
+        UrlHelper,
+        CameraController,
+        SelectionExtension,
+        FilteringExtension,
+      } = speckle;
+
+      if (!Viewer) throw new Error("@speckle/viewer not loaded");
+
+      const viewer = new Viewer(containerRef.current, {
+        ...DefaultViewerParams,
+        showStats: false,
+        verbose: false,
+      });
       await viewer.init();
       viewerRef.current = viewer;
+
       viewer.createExtension(CameraController);
       if (FilteringExtension) filteringExtRef.current = viewer.createExtension(FilteringExtension);
       if (SelectionExtension) selectionExtRef.current = viewer.createExtension(SelectionExtension);
+
+      // Selezione click nel viewer 3D
       if (ViewerEvent) {
-        viewer.on(ViewerEvent.ObjectClicked, (event: unknown) => {
-          const e = event as { hits?: Array<{ node?: { model?: { raw?: { id?: string } } } }> };
-          const ids = (e?.hits ?? []).map((h) => h?.node?.model?.raw?.id).filter((id): id is string => Boolean(id));
-          setSelectedIds(ids, "viewer");
-        });
+        viewer.on(
+          ViewerEvent.ObjectClicked,
+          (event: unknown) => {
+            const e = event as {
+              hits?: Array<{ node?: { model?: { raw?: { id?: string } } } }>;
+            };
+            const ids = (e?.hits ?? [])
+              .map((h) => h?.node?.model?.raw?.id)
+              .filter((id): id is string => Boolean(id));
+            setSelectedIds(ids, "viewer");
+          }
+        );
       }
-      log("Loading model...");
+
+      log("Loading 3D model...");
       const urls = await UrlHelper.getResourceUrls(PROJECT_URL, EMBED_TOKEN);
       for (const url of urls) {
         const loader = new SpeckleLoader(viewer.getWorldTree(), url, EMBED_TOKEN);
         await viewer.loadObject(loader, true);
       }
-      const bimObjects = extractBimObjects(viewer.getWorldTree());
-      const cats = bimObjects.reduce((acc: Record<string,number>, o) => { acc[o.category] = (acc[o.category]||0)+1; return acc; }, {});
-      log(Object.entries(cats).map(([k,v]) => `${k}:${v}`).join(" "));
-      if (bimObjects.length > 5) {
-        setBimObjects(bimObjects);
-      } else {
-        const { generateMockData } = await import("@/lib/speckleExtractor");
-        setBimObjects(generateMockData());
-        log("Using mock data");
-      }
+      log("3D model loaded");
+
+      // Carica i metadati BIM in parallelo (REST API, indipendente dal viewer)
+      await loadBimData();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      log("ERROR: " + msg);
+      console.error("[SpeckleViewer] Viewer init failed:", msg);
+      log(`Viewer error: ${msg}`);
       setLoadError(msg);
-      try { const { generateMockData } = await import("@/lib/speckleExtractor"); setBimObjects(generateMockData()); } catch { /* ignore */ }
-    } finally { setLoading(false); }
-  }, [setSelectedIds, setLoading, setLoadError, setBimObjects]);
+      setLoading(false);
+    }
+  }, [setSelectedIds, setLoading, setLoadError, loadBimData]);
 
   useEffect(() => {
     initViewer();
     return () => {
       if (viewerRef.current?.dispose) viewerRef.current.dispose();
-      viewerRef.current = null; filteringExtRef.current = null; selectionExtRef.current = null; isInitialized.current = false;
+      viewerRef.current = null;
+      filteringExtRef.current = null;
+      selectionExtRef.current = null;
+      isInitialized.current = false;
     };
   }, [initViewer]);
 
-  // Filtri → isolamento nel 3D (false = nascondi il resto, non xray)
+  // ── Applica filtri al viewer 3D ──────────────────────────────
   useEffect(() => {
     const filtering = filteringExtRef.current;
     if (!filtering) return;
@@ -151,54 +150,102 @@ export const SpeckleViewer = () => {
       filtering.resetFilters();
       if (filteredIds.length > 0) {
         filtering.isolateObjects(filteredIds, "filters", false);
-        log(`Isolated: ${filteredIds.length}`);
-      } else {
-        log("Reset");
       }
-    } catch (e) { log("Filter err: " + String(e)); }
+    } catch (e) {
+      console.warn("[SpeckleViewer] Filter error:", e);
+    }
   }, [filteredIds]);
 
+  // ── Sincronizza selezione chart → viewer ─────────────────────
   useEffect(() => {
     const selection = selectionExtRef.current;
     if (!selection || lastSelectionSource !== "chart") return;
-    try { selection.selectObjects([...selectedIds]); } catch { /* ignore */ }
+    try {
+      selection.selectObjects([...selectedIds]);
+    } catch {
+      /* ignore */
+    }
   }, [selectedIds, lastSelectionSource]);
 
   const handleReset = () => {
-    try { filteringExtRef.current?.resetFilters?.(); selectionExtRef.current?.clearSelection?.(); } catch { /* ignore */ }
+    try {
+      filteringExtRef.current?.resetFilters?.();
+      selectionExtRef.current?.clearSelection?.();
+    } catch {
+      /* ignore */
+    }
     useBimStore.getState().clearFilters();
     useBimStore.getState().clearSelection();
   };
 
   return (
     <div className="relative w-full h-full bg-[#1a1f2e] rounded-xl overflow-hidden">
+      {/* Canvas viewer 3D */}
       <div ref={containerRef} className="w-full h-full" />
+
+      {/* Loading overlay */}
       {isLoading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1f2e]/90 z-10">
           <Loader2 className="h-8 w-8 animate-spin text-blue-400 mb-3" />
-          <p className="text-sm text-blue-200 font-medium">Caricamento modello BIM…</p>
-          <p className="text-xs text-blue-300/60 mt-1">Connessione a Speckle in corso</p>
+          <p className="text-sm text-blue-200 font-medium">Loading BIM model…</p>
+          <p className="text-xs text-blue-300/60 mt-1">Connecting to Speckle</p>
         </div>
       )}
+
+      {/* Error overlay — mostrato solo se loadError E non sta caricando */}
       {loadError && !isLoading && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1f2e]/95 z-10 p-6">
-          <AlertCircle className="h-8 w-8 text-amber-400 mb-3" />
-          <p className="text-sm text-amber-200 font-medium text-center mb-1">Viewer non disponibile</p>
-          <p className="text-xs text-slate-500 text-center font-mono bg-slate-800 px-3 py-2 rounded max-w-xs break-all">{loadError}</p>
+          <WifiOff className="h-8 w-8 text-red-400 mb-3" />
+          <p className="text-sm text-red-300 font-medium text-center mb-2">
+            Failed to load BIM data
+          </p>
+          <p className="text-xs text-slate-500 text-center font-mono bg-slate-800/80 px-3 py-2 rounded max-w-sm break-all">
+            {loadError}
+          </p>
+          <button
+            onClick={() => {
+              setLoadError(null);
+              setLoading(true);
+              isInitialized.current = false;
+              loadBimData();
+            }}
+            className="mt-4 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors"
+          >
+            Retry
+          </button>
+          <p className="text-[10px] text-slate-600 mt-3 text-center max-w-xs">
+            Check that the Speckle token is valid and the project is accessible.
+          </p>
         </div>
       )}
+
+      {/* Reset button */}
       <div className="absolute top-3 right-3 z-10">
-        <button onClick={handleReset} className="p-2 rounded-lg bg-black/40 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-all">
+        <button
+          onClick={handleReset}
+          className="p-2 rounded-lg bg-black/40 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-all"
+          title="Reset filters and selection"
+        >
           <RotateCcw className="h-4 w-4" />
         </button>
       </div>
-      {debugLines.length > 0 && (
-        <div className="absolute bottom-8 left-2 right-2 z-20 bg-black/80 rounded p-2">
-          {debugLines.map((line, i) => <p key={i} className="text-[10px] font-mono text-green-300 leading-tight">{line}</p>)}
+
+      {/* Status log (dev) */}
+      {statusLines.length > 0 && (
+        <div className="absolute bottom-8 left-2 right-2 z-20 bg-black/70 rounded p-2 pointer-events-none">
+          {statusLines.map((line, i) => (
+            <p key={i} className="text-[10px] font-mono text-green-300 leading-tight">
+              {line}
+            </p>
+          ))}
         </div>
       )}
+
+      {/* Badge */}
       <div className="absolute bottom-3 left-3 z-10">
-        <span className="text-xs text-white/50 bg-black/30 backdrop-blur-sm px-2 py-1 rounded">BIM 3D · Speckle</span>
+        <span className="text-xs text-white/50 bg-black/30 backdrop-blur-sm px-2 py-1 rounded">
+          BIM 3D · Speckle
+        </span>
       </div>
     </div>
   );
