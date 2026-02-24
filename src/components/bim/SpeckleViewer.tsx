@@ -1,15 +1,97 @@
 // ============================================================
 // FILE: src/components/bim/SpeckleViewer.tsx
-// Versione con debug panel visibile per diagnosticare il filtering
+// Fix: estrae IDs reali dall'albero del viewer per il filtering
 // ============================================================
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useBimStore } from "@/store/bimStore";
-import { fetchBimObjects } from "@/lib/speckleExtractor";
 import { Loader2, AlertCircle, RotateCcw } from "lucide-react";
+import type { BimObject } from "@/store/bimStore";
 
 const PROJECT_URL = "https://app.speckle.systems/projects/a0102047d4/models/all";
 const EMBED_TOKEN = "0c70148e6c17a7848184ee9a7947313e5359b3bf70";
+
+// ── Mappatura categoria da speckle_type ──────────────────────
+function categoryFromType(speckleType: string): string {
+  const t = speckleType.toLowerCase();
+  if (t.includes("wall")) return "Wall";
+  if (t.includes("floor") || t.includes("slab")) return "Floor";
+  if (t.includes("column")) return "Column";
+  if (t.includes("beam")) return "Beam";
+  if (t.includes("roof")) return "Roof";
+  if (t.includes("window")) return "Window";
+  if (t.includes("door")) return "Door";
+  if (t.includes("stair")) return "Stair";
+  if (t.includes("ceiling")) return "Ceiling";
+  if (t.includes("furniture")) return "Furniture";
+  return "Other";
+}
+
+// ── Estrae BimObjects dall'albero del viewer ─────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractBimObjectsFromTree(worldTree: any): BimObject[] {
+  const objects: BimObject[] = [];
+
+  try {
+    // Itera su tutti i nodi dell'albero
+    worldTree.walk((node: Record<string, unknown>) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw = (node as any)?.model?.raw;
+      if (!raw || !raw.id || !raw.speckle_type) return true; // continua il walk
+
+      const speckleType = String(raw.speckle_type);
+      // Salta oggetti contenitore (commit, collection, ecc.)
+      if (
+        speckleType.includes("Collection") ||
+        speckleType.includes("commit") ||
+        speckleType === "Base"
+      ) return true;
+
+      // Livello
+      const levelRaw = raw.level;
+      const level =
+        (typeof levelRaw === "object" && levelRaw !== null
+          ? (levelRaw as Record<string, unknown>).name
+          : levelRaw) as string | undefined;
+
+      // Materiale
+      const matsRaw = raw.materials as unknown[] | undefined;
+      const material =
+        ((matsRaw?.[0] as Record<string, unknown>)?.name as string) ||
+        "Unknown";
+
+      // Parametri Revit
+      const params = raw.parameters as Record<string, unknown> | undefined;
+
+      const volume =
+        (params?.["HOST_VOLUME_COMPUTED"] as number) ||
+        (raw.volume as number) ||
+        0;
+      const area =
+        (params?.["HOST_AREA_COMPUTED"] as number) ||
+        (raw.area as number) ||
+        0;
+
+      objects.push({
+        id: String(raw.id),
+        speckleType,
+        category: categoryFromType(speckleType),
+        level: String(level || "Unknown").trim(),
+        material: String(material).trim(),
+        volume: Number(volume) || 0,
+        area: Number(area) || 0,
+        family: raw.family as string | undefined,
+        mark: raw.mark as string | undefined,
+      });
+
+      return true; // continua il walk
+    });
+  } catch (e) {
+    console.warn("Tree walk error:", e);
+  }
+
+  return objects;
+}
 
 export const SpeckleViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -22,9 +104,8 @@ export const SpeckleViewer = () => {
   const isInitialized = useRef(false);
   const [debugLines, setDebugLines] = useState<string[]>([]);
 
-  const log = (msg: string) => {
-    setDebugLines((prev) => [...prev.slice(-6), msg]);
-  };
+  const log = (msg: string) =>
+    setDebugLines((prev) => [...prev.slice(-5), msg]);
 
   const {
     setSelectedIds,
@@ -45,13 +126,7 @@ export const SpeckleViewer = () => {
     setLoadError(null);
 
     try {
-      log("Importing @speckle/viewer...");
       const speckle = await import(/* @vite-ignore */ "@speckle/viewer");
-
-      // Log delle chiavi disponibili nel modulo
-      const keys = Object.keys(speckle).join(", ");
-      log("Exports: " + keys.slice(0, 120));
-
       const {
         Viewer,
         DefaultViewerParams,
@@ -63,30 +138,18 @@ export const SpeckleViewer = () => {
         FilteringExtension,
       } = speckle;
 
-      if (!Viewer || !DefaultViewerParams) {
-        throw new Error("Viewer/DefaultViewerParams mancanti");
-      }
+      if (!Viewer || !DefaultViewerParams) throw new Error("@speckle/viewer non caricato");
 
-      log("Creating viewer...");
       const params = { ...DefaultViewerParams, showStats: false, verbose: false };
       const viewer = new Viewer(containerRef.current, params);
       await viewer.init();
       viewerRef.current = viewer;
-      log("Viewer init OK");
 
       viewer.createExtension(CameraController);
 
       if (FilteringExtension) {
         filteringExtRef.current = viewer.createExtension(FilteringExtension);
-        // Log dei metodi disponibili sull'estensione
-        const methods = Object.getOwnPropertyNames(
-          Object.getPrototypeOf(filteringExtRef.current)
-        ).join(", ");
-        log("FilteringExt methods: " + methods.slice(0, 150));
-      } else {
-        log("FilteringExtension NOT FOUND in module");
       }
-
       if (SelectionExtension) {
         selectionExtRef.current = viewer.createExtension(SelectionExtension);
       }
@@ -101,26 +164,37 @@ export const SpeckleViewer = () => {
         });
       }
 
+      // Carica il modello
       log("Loading model...");
       const urls = await UrlHelper.getResourceUrls(PROJECT_URL, EMBED_TOKEN);
-      log(`URLs: ${urls.length}`);
       for (const url of urls) {
         const loader = new SpeckleLoader(viewer.getWorldTree(), url, EMBED_TOKEN);
         await viewer.loadObject(loader, true);
       }
-      log("Model loaded OK");
+      log("Model loaded. Extracting objects...");
 
-      const objects = await fetchBimObjects();
-      setBimObjects(objects);
-      log(`BIM objects: ${objects.length}`);
+      // ── CHIAVE: estrai BimObjects dall'albero reale del viewer ──
+      const worldTree = viewer.getWorldTree();
+      const bimObjects = extractBimObjectsFromTree(worldTree);
+      log(`Extracted ${bimObjects.length} objects from tree`);
+
+      if (bimObjects.length > 0) {
+        setBimObjects(bimObjects);
+        log(`Sample ID: ${bimObjects[0].id} cat: ${bimObjects[0].category}`);
+      } else {
+        // Fallback ai dati mock se l'estrazione fallisce
+        const { generateMockData } = await import("@/lib/speckleExtractor");
+        setBimObjects(generateMockData());
+        log("Fallback to mock data");
+      }
 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log("ERROR: " + msg);
       setLoadError(msg);
       try {
-        const objects = await fetchBimObjects();
-        setBimObjects(objects);
+        const { generateMockData } = await import("@/lib/speckleExtractor");
+        setBimObjects(generateMockData());
       } catch { /* ignore */ }
     } finally {
       setLoading(false);
@@ -141,39 +215,17 @@ export const SpeckleViewer = () => {
   // Filtri dai grafici → isola oggetti nel 3D
   useEffect(() => {
     const filtering = filteringExtRef.current;
-    if (!filtering) {
-      if (filteredIds.length > 0) log("FILTER: no filteringExt ref!");
-      return;
-    }
-
-    log(`FILTER: ${filteredIds.length} IDs, methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(filtering)).join(",")}`);
-
+    if (!filtering) return;
     try {
       if (filteredIds.length > 0) {
-        // Prova i vari nomi di metodo possibili
-        if (typeof filtering.isolateObjects === "function") {
-          filtering.isolateObjects(filteredIds, "filters", true);
-          log("Called isolateObjects OK");
-        } else if (typeof filtering.setFilters === "function") {
-          filtering.setFilters({ filterBy: { id: filteredIds } });
-          log("Called setFilters OK");
-        } else if (typeof filtering.filter === "function") {
-          filtering.filter({ ids: filteredIds });
-          log("Called filter OK");
-        } else {
-          log("No known filter method found!");
-        }
+        filtering.isolateObjects(filteredIds, "filters", true);
+        log(`Isolated ${filteredIds.length} objects`);
       } else {
-        if (typeof filtering.resetFilters === "function") {
-          filtering.resetFilters();
-          log("Called resetFilters OK");
-        } else if (typeof filtering.reset === "function") {
-          filtering.reset();
-          log("Called reset OK");
-        }
+        filtering.resetFilters();
+        log("Reset filters");
       }
     } catch (e) {
-      log("Filter ERROR: " + String(e));
+      log("Filter err: " + String(e));
     }
   }, [filteredIds]);
 
@@ -203,6 +255,7 @@ export const SpeckleViewer = () => {
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1f2e]/90 z-10">
           <Loader2 className="h-8 w-8 animate-spin text-blue-400 mb-3" />
           <p className="text-sm text-blue-200 font-medium">Caricamento modello BIM…</p>
+          <p className="text-xs text-blue-300/60 mt-1">Connessione a Speckle in corso</p>
         </div>
       )}
 
@@ -224,9 +277,9 @@ export const SpeckleViewer = () => {
         </div>
       )}
 
-      {/* DEBUG PANEL - visibile in basso a sinistra */}
+      {/* Debug panel */}
       {debugLines.length > 0 && (
-        <div className="absolute bottom-8 left-2 right-2 z-20 bg-black/80 rounded p-2 max-h-40 overflow-y-auto">
+        <div className="absolute bottom-8 left-2 right-2 z-20 bg-black/80 rounded p-2">
           {debugLines.map((line, i) => (
             <p key={i} className="text-[10px] font-mono text-green-300 leading-tight">{line}</p>
           ))}
