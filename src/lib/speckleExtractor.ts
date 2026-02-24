@@ -1,198 +1,291 @@
 // ============================================================
-// FILE: src/lib/speckleExtractor.ts  (FILE NUOVO)
+// FILE: src/lib/speckleExtractor.ts
 // ============================================================
-// Interroga l'API GraphQL di Speckle per estrarre i metadati
-// degli oggetti BIM e li normalizza in BimObject[].
-//
-// Speckle GraphQL endpoint: https://app.speckle.systems/graphql
+// Recupera oggetti BIM REALI dall'API REST di Speckle.
+// NON usa mock data. NON usa worldTree.walk().
+// Usa l'endpoint /objects che è stabile e documentato.
 // ============================================================
 
 import type { BimObject } from "@/store/bimStore";
 
-const SPECKLE_API = "https://app.speckle.systems/graphql";
-const PROJECT_ID = "a0102047d4";           // dal tuo URL Speckle
+const SPECKLE_SERVER = "https://app.speckle.systems";
+const PROJECT_ID = "a0102047d4";
 const EMBED_TOKEN = "0c70148e6c17a7848184ee9a7947313e5359b3bf70";
 
-// ── Query GraphQL ─────────────────────────────────────────────
-// Recupera gli ultimi commit e i loro oggetti con le proprietà
-// che ci servono per i grafici.
-const OBJECTS_QUERY = `
-  query GetModelObjects($projectId: String!) {
-    project(id: $projectId) {
-      models {
-        items {
-          id
-          name
-          versions(limit: 1) {
-            items {
-              id
-              referencedObject
+// ── Tipi container da ignorare ───────────────────────────────
+const CONTAINER_TYPES = new Set([
+  "objects.other.collection",
+  "base",
+  "objects.geometry.mesh",
+  "objects.geometry.brep",
+  "objects.geometry.curve",
+  "objects.geometry.line",
+  "objects.geometry.point",
+  "objects.geometry.polyline",
+  "objects.geometry.polycurve",
+]);
+
+// ── Mappatura categoria da speckleType ───────────────────────
+export function categoryFromType(speckleType: string): string {
+  const s = speckleType.toLowerCase();
+  if (s.includes("wall")) return "Wall";
+  if (s.includes("floor") || s.includes("slab")) return "Floor";
+  if (s.includes("column")) return "Column";
+  if (s.includes("beam")) return "Beam";
+  if (s.includes("roof")) return "Roof";
+  if (s.includes("window")) return "Window";
+  if (s.includes("door")) return "Door";
+  if (s.includes("stair")) return "Stair";
+  if (s.includes("ceiling")) return "Ceiling";
+  if (s.includes("furniture")) return "Furniture";
+  if (s.includes("railing")) return "Railing";
+  if (s.includes("pipe") || s.includes("duct")) return "MEP";
+  if (s.includes("site") || s.includes("terrain")) return "Site";
+  return "Other";
+}
+
+// ── Controlla se il tipo è un elemento BIM rilevante ─────────
+function isBimElement(speckleType: string): boolean {
+  const t = speckleType.toLowerCase();
+  // Includi solo BuiltElements, Revit e IFC — escludi container e geometria pura
+  return (
+    (t.includes("objects.builtelements") ||
+      t.includes("objects.revit") ||
+      t.includes("ifc")) &&
+    !CONTAINER_TYPES.has(t)
+  );
+}
+
+// ── Normalizza un oggetto raw Speckle in BimObject ───────────
+function normalizeObject(raw: Record<string, unknown>): BimObject | null {
+  if (!raw || typeof raw !== "object") return null;
+
+  const id = raw.id as string | undefined;
+  const speckleType = raw.speckle_type as string | undefined;
+
+  if (!id || !speckleType) return null;
+  if (!isBimElement(speckleType)) return null;
+
+  // Livello
+  const levelRaw = raw.level as Record<string, unknown> | string | undefined;
+  const levelName =
+    typeof levelRaw === "object" && levelRaw !== null
+      ? (levelRaw.name as string) ?? String(levelRaw)
+      : String(levelRaw ?? "");
+
+  // Parametri Revit (struttura: { paramName: { value: ... } })
+  const params = raw.parameters as Record<string, Record<string, unknown>> | undefined;
+
+  // Materiale
+  const matParamValue =
+    params?.["MATERIAL_ASSET_PARAM"]?.value ??
+    params?.["ALL_MODEL_MATERIAL_NAME"]?.value ??
+    params?.["STRUCTURAL_MATERIAL_PARAM"]?.value;
+
+  const matsRaw = raw.materials as Array<Record<string, unknown>> | undefined;
+  const material = String(
+    matParamValue ?? matsRaw?.[0]?.name ?? raw.material ?? "Unknown"
+  ).trim();
+
+  // Volume
+  const volumeParam =
+    params?.["HOST_VOLUME_COMPUTED"]?.value ??
+    params?.["VOLUME"]?.value;
+  const volume = Number(volumeParam ?? raw.volume ?? 0);
+
+  // Area
+  const areaParam =
+    params?.["HOST_AREA_COMPUTED"]?.value ??
+    params?.["AREA"]?.value;
+  const area = Number(areaParam ?? raw.area ?? 0);
+
+  return {
+    id,
+    speckleType,
+    category: categoryFromType(speckleType),
+    level: levelName.trim() || "Unknown",
+    material: material || "Unknown",
+    volume: isNaN(volume) ? 0 : volume,
+    area: isNaN(area) ? 0 : area,
+    family: raw.family as string | undefined,
+    mark: (raw.mark ?? raw["Mark"]) as string | undefined,
+  };
+}
+
+// ── Step 1: GraphQL → ottieni il referencedObject del commit più recente ──
+async function getLatestRootObjectId(): Promise<string> {
+  const query = `
+    query {
+      project(id: "${PROJECT_ID}") {
+        models(limit: 10) {
+          items {
+            id
+            name
+            versions(limit: 1) {
+              items {
+                referencedObject
+              }
             }
           }
         }
       }
     }
-  }
-`;
+  `;
 
-// ── Mappatura categoria da speckleType ───────────────────────
-function categoryFromType(speckleType: string): string {
-  const type = speckleType.toLowerCase();
-  if (type.includes("wall")) return "Wall";
-  if (type.includes("floor") || type.includes("slab")) return "Floor";
-  if (type.includes("column")) return "Column";
-  if (type.includes("beam")) return "Beam";
-  if (type.includes("roof")) return "Roof";
-  if (type.includes("window")) return "Window";
-  if (type.includes("door")) return "Door";
-  if (type.includes("stair")) return "Stair";
-  if (type.includes("ceiling")) return "Ceiling";
-  if (type.includes("furniture")) return "Furniture";
-  if (type.includes("pipe")) return "Pipe";
-  if (type.includes("duct")) return "Duct";
-  return "Other";
-}
-
-// ── Estrai proprietà da oggetto Speckle grezzo ───────────────
-function normalizeObject(raw: Record<string, unknown>): BimObject | null {
-  // Gli oggetti senza ID o tipo non sono utili
-  if (!raw.id || !raw.speckle_type) return null;
-
-  const speckleType = String(raw.speckle_type);
-
-  // Livello: cerca in vari posti a seconda di Revit/IFC
-  const level =
-    (raw.level as Record<string, unknown>)?.name as string ||
-    (raw.parameters as Record<string, unknown>)?.["SCHEDULE_LEVEL_PARAM"] as string ||
-    String(raw.level || "Unknown");
-
-  // Materiale: prendi il primo dalla lista o dal parametro
-  const materials = raw.materials as unknown[] | undefined;
-  const material =
-    (materials?.[0] as Record<string, unknown>)?.name as string ||
-    (raw.parameters as Record<string, unknown>)?.["MATERIAL_ASSET_PARAM"] as string ||
-    "Unknown";
-
-  // Volume e area
-  const volume =
-    (raw.parameters as Record<string, unknown>)?.["HOST_VOLUME_COMPUTED"] as number ||
-    (raw.volume as number) ||
-    0;
-  const area =
-    (raw.parameters as Record<string, unknown>)?.["HOST_AREA_COMPUTED"] as number ||
-    (raw.area as number) ||
-    0;
-
-  return {
-    id: String(raw.id),
-    speckleType,
-    category: categoryFromType(speckleType),
-    level: String(level).trim() || "Unknown",
-    material: String(material).trim() || "Unknown",
-    volume: Number(volume) || 0,
-    area: Number(area) || 0,
-    family: raw.family as string | undefined,
-    mark: raw.mark as string | undefined,
-  };
-}
-
-// ── Fetch oggetti da Speckle ──────────────────────────────────
-// Usa l'object loader diretto (più efficiente della GraphQL per
-// grandi modelli). Recupera l'oggetto root e scende nei figli.
-export async function fetchBimObjects(): Promise<BimObject[]> {
-  try {
-    // 1. Recupera il referencedObject dal commit più recente
-    const gqlRes = await fetch(SPECKLE_API, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${EMBED_TOKEN}`,
-      },
-      body: JSON.stringify({
-        query: OBJECTS_QUERY,
-        variables: { projectId: PROJECT_ID },
-      }),
-    });
-
-    if (!gqlRes.ok) throw new Error(`GraphQL error: ${gqlRes.status}`);
-
-    const gqlData = await gqlRes.json();
-    const models = gqlData?.data?.project?.models?.items ?? [];
-
-    if (models.length === 0) return generateMockData(); // fallback
-
-    const firstModel = models[0];
-    const versions = firstModel?.versions?.items ?? [];
-    if (versions.length === 0) return generateMockData();
-
-    const rootObjectId = versions[0].referencedObject;
-
-    // 2. Scarica l'oggetto root con tutti i figli
-    const objRes = await fetch(
-      `https://app.speckle.systems/streams/${PROJECT_ID}/objects/${rootObjectId}/download`,
-      {
-        headers: { Authorization: `Bearer ${EMBED_TOKEN}` },
-      }
-    );
-
-    if (!objRes.ok) throw new Error(`Object fetch error: ${objRes.status}`);
-
-    // La risposta è NDJSON (un JSON per riga)
-    const text = await objRes.text();
-    const lines = text.split("\n").filter(Boolean);
-    const rawObjects = lines.map((line) => {
-      try {
-        return JSON.parse(line);
-      } catch {
-        return null;
-      }
-    }).filter(Boolean);
-
-    const bimObjects = rawObjects
-      .map((raw: Record<string, unknown>) => normalizeObject(raw))
-      .filter((o): o is BimObject => o !== null);
-
-    return bimObjects.length > 0 ? bimObjects : generateMockData();
-
-  } catch (err) {
-    console.warn("Speckle fetch failed, using mock data:", err);
-    return generateMockData();
-  }
-}
-
-// ── Dati mock per sviluppo locale / fallback ──────────────────
-// Usati quando il modello non è raggiungibile o per testing.
-export function generateMockData(): BimObject[] {
-  const categories = ["Wall", "Floor", "Column", "Beam", "Roof", "Window", "Door", "Stair"];
-  const levels = ["Ground Floor", "Level 1", "Level 2", "Level 3", "Roof Level"];
-  const materials = ["Concrete", "Steel", "Timber", "Glass", "Masonry", "Aluminum"];
-
-  const counts: Record<string, number> = {
-    Wall: 120, Floor: 45, Column: 80, Beam: 95,
-    Roof: 12, Window: 60, Door: 35, Stair: 8,
-  };
-
-  const objects: BimObject[] = [];
-  let idCounter = 1;
-
-  categories.forEach((category) => {
-    const count = counts[category] || 20;
-    for (let i = 0; i < count; i++) {
-      const level = levels[Math.floor(Math.random() * levels.length)];
-      const material = materials[Math.floor(Math.random() * materials.length)];
-      objects.push({
-        id: `obj_${String(idCounter++).padStart(4, "0")}`,
-        speckleType: `Objects.BuiltElements.${category}`,
-        category,
-        level,
-        material,
-        volume: Math.round(Math.random() * 50 * 100) / 100,
-        area: Math.round(Math.random() * 100 * 100) / 100,
-        family: `${category} Family ${Math.floor(Math.random() * 5) + 1}`,
-        mark: `${category[0]}${String(idCounter).padStart(3, "0")}`,
-      });
-    }
+  const res = await fetch(`${SPECKLE_SERVER}/graphql`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${EMBED_TOKEN}`,
+    },
+    body: JSON.stringify({ query }),
   });
 
-  return objects;
+  if (!res.ok) throw new Error(`GraphQL request failed: ${res.status} ${res.statusText}`);
+
+  const data = await res.json();
+
+  if (data.errors) {
+    throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
+  }
+
+  const models = data?.data?.project?.models?.items as Array<{
+    id: string;
+    name: string;
+    versions: { items: Array<{ referencedObject: string }> };
+  }>;
+
+  if (!models?.length) throw new Error("No models found in project");
+
+  // Prendi il primo model con una versione
+  for (const model of models) {
+    const refObj = model.versions?.items?.[0]?.referencedObject;
+    if (refObj) {
+      console.log(`[Speckle] Using model: "${model.name}", rootObjectId: ${refObj}`);
+      return refObj;
+    }
+  }
+
+  throw new Error("No versions found in any model");
+}
+
+// ── Step 2: Scarica l'oggetto root e tutti i suoi figli (NDJSON) ──
+// L'endpoint /objects/:streamId/:objectId/download restituisce NDJSON:
+// ogni riga è un JSON con un oggetto Speckle.
+async function downloadObjectsNDJSON(rootObjectId: string): Promise<Record<string, unknown>[]> {
+  // Speckle usa ancora "streams" nell'API REST anche per i nuovi "projects"
+  const url = `${SPECKLE_SERVER}/api/getobjects/${PROJECT_ID}`;
+
+  // POST con lista di objectIds da scaricare (bulk download)
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${EMBED_TOKEN}`,
+      Accept: "text/plain",
+    },
+    body: JSON.stringify({ objects: JSON.stringify([rootObjectId]) }),
+  });
+
+  if (!res.ok) {
+    // Fallback: prova l'endpoint legacy streams
+    return downloadObjectsLegacy(rootObjectId);
+  }
+
+  const text = await res.text();
+  return parseNDJSON(text);
+}
+
+async function downloadObjectsLegacy(rootObjectId: string): Promise<Record<string, unknown>[]> {
+  // Endpoint legacy che funziona anche con embed token
+  const url = `${SPECKLE_SERVER}/streams/${PROJECT_ID}/objects/${rootObjectId}/download`;
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${EMBED_TOKEN}`,
+    },
+  });
+
+  if (!res.ok) {
+    throw new Error(`Object download failed: ${res.status} ${res.statusText}`);
+  }
+
+  const text = await res.text();
+  return parseNDJSON(text);
+}
+
+function parseNDJSON(text: string): Record<string, unknown>[] {
+  const results: Record<string, unknown>[] = [];
+
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object") {
+        results.push(parsed as Record<string, unknown>);
+      }
+    } catch {
+      // riga non valida, skip
+    }
+  }
+
+  return results;
+}
+
+// ── Step 3: Segui i riferimenti __closure per caricare gli oggetti figli ──
+// Speckle serializza oggetti complessi come riferimenti { referencedId, speckle_type: "reference" }
+// Il download bulk li include automaticamente, ma se mancassero si può fare
+// un secondo fetch. In questo caso il download NDJSON li include già tutti.
+
+// ── API principale: fetch dati BIM reali ─────────────────────────────────
+export async function fetchBimObjects(): Promise<BimObject[]> {
+  console.log("[Speckle] Fetching real BIM data...");
+
+  // Step 1: ottieni root object ID
+  const rootObjectId = await getLatestRootObjectId();
+
+  // Step 2: scarica tutti gli oggetti
+  const rawObjects = await downloadObjectsNDJSON(rootObjectId);
+  console.log(`[Speckle] Downloaded ${rawObjects.length} raw objects`);
+
+  if (rawObjects.length === 0) {
+    throw new Error("No objects received from Speckle API");
+  }
+
+  // Step 3: normalizza e filtra solo gli elementi BIM
+  const bimObjects: BimObject[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of rawObjects) {
+    const obj = normalizeObject(raw);
+    if (!obj) continue;
+    if (seen.has(obj.id)) continue;
+    seen.add(obj.id);
+    bimObjects.push(obj);
+  }
+
+  console.log(`[Speckle] Extracted ${bimObjects.length} BIM elements`);
+
+  // Log distribuzione per debug
+  const cats: Record<string, number> = {};
+  for (const o of bimObjects) {
+    cats[o.category] = (cats[o.category] ?? 0) + 1;
+  }
+  console.log("[Speckle] Categories:", cats);
+
+  if (bimObjects.length === 0) {
+    // Nessun elemento BuiltElements trovato — logga tutti i tipi per debug
+    const types = new Set(
+      rawObjects
+        .map((o) => o.speckle_type as string)
+        .filter(Boolean)
+    );
+    console.warn("[Speckle] No BIM elements found. Types in model:", [...types]);
+    throw new Error(
+      `No BIM elements found. Available types: ${[...types].slice(0, 10).join(", ")}`
+    );
+  }
+
+  return bimObjects;
 }
