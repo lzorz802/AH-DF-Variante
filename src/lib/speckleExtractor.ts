@@ -1,31 +1,52 @@
 // ============================================================
-// FILE: src/lib/speckleExtractor.ts
+// FILE: src/lib/speckleExtractor.ts  ← SOSTITUISCE COMPLETAMENTE
 // ============================================================
-// Recupera oggetti BIM REALI dall'API REST di Speckle.
-// NON usa mock data. NON usa worldTree.walk().
-// Usa l'endpoint /objects che è stabile e documentato.
+// Approccio: REST API nativa di Speckle v2, zero dipendenze extra.
+//
+// FLUSSO:
+// 1. GraphQL  → ottieni referencedObject (root ID) del commit
+// 2. GET /objects/{streamId}/{rootId}/single → oggetto root
+//    Il root ha __closure: { "childId": depth, ... }
+// 3. POST /api/getobjects/{streamId}  → download bulk NDJSON
+//    di tutti i child ID presenti nel __closure
+// 4. Filtra isBimElement() e normalizza → BimObject[]
+//
+// Questo è l'endpoint documentato e stabile di Speckle v2.
 // ============================================================
 
 import type { BimObject } from "@/store/bimStore";
 
-const SPECKLE_SERVER = "https://app.speckle.systems";
-const PROJECT_ID = "a0102047d4";
-const EMBED_TOKEN = "0c70148e6c17a7848184ee9a7947313e5359b3bf70";
+const SERVER = "https://app.speckle.systems";
+const STREAM_ID = "a0102047d4";
+const TOKEN = "0c70148e6c17a7848184ee9a7947313e5359b3bf70";
+const AUTH = { Authorization: `Bearer ${TOKEN}` };
 
-// ── Tipi container da ignorare ───────────────────────────────
-const CONTAINER_TYPES = new Set([
-  "objects.other.collection",
-  "base",
-  "objects.geometry.mesh",
-  "objects.geometry.brep",
-  "objects.geometry.curve",
-  "objects.geometry.line",
-  "objects.geometry.point",
-  "objects.geometry.polyline",
-  "objects.geometry.polycurve",
-]);
+// ── Tipi da ignorare ─────────────────────────────────────────
+function shouldSkip(speckleType: string): boolean {
+  const t = speckleType.toLowerCase();
+  return (
+    t === "base" ||
+    t.startsWith("objects.geometry.") ||
+    t.startsWith("objects.other.rendermaterial") ||
+    t.startsWith("objects.other.displaystyle") ||
+    t.startsWith("objects.other.collection") ||
+    t.startsWith("objects.primitive.") ||
+    t === "reference" ||
+    t.endsWith(":reference")
+  );
+}
 
-// ── Mappatura categoria da speckleType ───────────────────────
+function isBimElement(speckleType: string): boolean {
+  if (shouldSkip(speckleType)) return false;
+  const t = speckleType.toLowerCase();
+  return (
+    t.startsWith("objects.builtelements") ||
+    t.startsWith("objects.revit") ||
+    t.includes("ifc")
+  );
+}
+
+// ── Mappatura categoria ──────────────────────────────────────
 export function categoryFromType(speckleType: string): string {
   const s = speckleType.toLowerCase();
   if (s.includes("wall")) return "Wall";
@@ -44,60 +65,34 @@ export function categoryFromType(speckleType: string): string {
   return "Other";
 }
 
-// ── Controlla se il tipo è un elemento BIM rilevante ─────────
-function isBimElement(speckleType: string): boolean {
-  const t = speckleType.toLowerCase();
-  // Includi solo BuiltElements, Revit e IFC — escludi container e geometria pura
-  return (
-    (t.includes("objects.builtelements") ||
-      t.includes("objects.revit") ||
-      t.includes("ifc")) &&
-    !CONTAINER_TYPES.has(t)
-  );
-}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeObject(raw: Record<string, any>): BimObject | null {
+  const id = String(raw.id ?? "");
+  const speckleType = String(raw.speckle_type ?? "");
+  if (!id || !speckleType || !isBimElement(speckleType)) return null;
 
-// ── Normalizza un oggetto raw Speckle in BimObject ───────────
-function normalizeObject(raw: Record<string, unknown>): BimObject | null {
-  if (!raw || typeof raw !== "object") return null;
-
-  const id = raw.id as string | undefined;
-  const speckleType = raw.speckle_type as string | undefined;
-
-  if (!id || !speckleType) return null;
-  if (!isBimElement(speckleType)) return null;
-
-  // Livello
-  const levelRaw = raw.level as Record<string, unknown> | string | undefined;
+  const lvl = raw.level;
   const levelName =
-    typeof levelRaw === "object" && levelRaw !== null
-      ? (levelRaw.name as string) ?? String(levelRaw)
-      : String(levelRaw ?? "");
+    lvl && typeof lvl === "object"
+      ? String(lvl.name ?? lvl.elevation ?? "Unknown")
+      : String(lvl ?? "Unknown");
 
-  // Parametri Revit (struttura: { paramName: { value: ... } })
-  const params = raw.parameters as Record<string, Record<string, unknown>> | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const params = raw.parameters as Record<string, any> | undefined;
+  const pv = (key: string) => params?.[key]?.value;
 
-  // Materiale
-  const matParamValue =
-    params?.["MATERIAL_ASSET_PARAM"]?.value ??
-    params?.["ALL_MODEL_MATERIAL_NAME"]?.value ??
-    params?.["STRUCTURAL_MATERIAL_PARAM"]?.value;
-
-  const matsRaw = raw.materials as Array<Record<string, unknown>> | undefined;
   const material = String(
-    matParamValue ?? matsRaw?.[0]?.name ?? raw.material ?? "Unknown"
+    pv("MATERIAL_ASSET_PARAM") ??
+    pv("ALL_MODEL_MATERIAL_NAME") ??
+    pv("STRUCTURAL_MATERIAL_PARAM") ??
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (raw.materials as any[])?.[0]?.name ??
+    raw.material ??
+    "Unknown"
   ).trim();
 
-  // Volume
-  const volumeParam =
-    params?.["HOST_VOLUME_COMPUTED"]?.value ??
-    params?.["VOLUME"]?.value;
-  const volume = Number(volumeParam ?? raw.volume ?? 0);
-
-  // Area
-  const areaParam =
-    params?.["HOST_AREA_COMPUTED"]?.value ??
-    params?.["AREA"]?.value;
-  const area = Number(areaParam ?? raw.area ?? 0);
+  const volume = Number(pv("HOST_VOLUME_COMPUTED") ?? pv("VOLUME") ?? raw.volume ?? 0);
+  const area = Number(pv("HOST_AREA_COMPUTED") ?? pv("AREA") ?? raw.area ?? 0);
 
   return {
     id,
@@ -112,178 +107,154 @@ function normalizeObject(raw: Record<string, unknown>): BimObject | null {
   };
 }
 
-// ── Step 1: GraphQL → ottieni il referencedObject del commit più recente ──
-async function getLatestRootObjectId(): Promise<string> {
-  const query = `
-    query {
-      project(id: "${PROJECT_ID}") {
-        models(limit: 10) {
-          items {
-            id
-            name
-            versions(limit: 1) {
-              items {
-                referencedObject
+function parseNDJSON(text: string): Record<string, unknown>[] {
+  const results: Record<string, unknown>[] = [];
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    if (!t) continue;
+    try {
+      const parsed = JSON.parse(t);
+      if (parsed && typeof parsed === "object") results.push(parsed);
+    } catch { /* skip */ }
+  }
+  return results;
+}
+
+// ── Step 1: root object ID via GraphQL ───────────────────────
+async function getRootObjectId(): Promise<string> {
+  const res = await fetch(`${SERVER}/graphql`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...AUTH },
+    body: JSON.stringify({
+      query: `query {
+        project(id: "${STREAM_ID}") {
+          models(limit: 20) {
+            items {
+              name
+              versions(limit: 1) {
+                items { referencedObject }
               }
             }
           }
         }
-      }
-    }
-  `;
-
-  const res = await fetch(`${SPECKLE_SERVER}/graphql`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${EMBED_TOKEN}`,
-    },
-    body: JSON.stringify({ query }),
+      }`,
+    }),
   });
+  if (!res.ok) throw new Error(`GraphQL HTTP ${res.status}`);
+  const json = await res.json();
+  if (json.errors) throw new Error(`GraphQL: ${json.errors[0]?.message}`);
 
-  if (!res.ok) throw new Error(`GraphQL request failed: ${res.status} ${res.statusText}`);
-
-  const data = await res.json();
-
-  if (data.errors) {
-    throw new Error(`GraphQL errors: ${JSON.stringify(data.errors)}`);
-  }
-
-  const models = data?.data?.project?.models?.items as Array<{
-    id: string;
+  const models = json?.data?.project?.models?.items as Array<{
     name: string;
     versions: { items: Array<{ referencedObject: string }> };
   }>;
+  if (!models?.length) throw new Error("No models in project");
 
-  if (!models?.length) throw new Error("No models found in project");
-
-  // Prendi il primo model con una versione
-  for (const model of models) {
-    const refObj = model.versions?.items?.[0]?.referencedObject;
-    if (refObj) {
-      console.log(`[Speckle] Using model: "${model.name}", rootObjectId: ${refObj}`);
-      return refObj;
+  for (const m of models) {
+    const ref = m.versions?.items?.[0]?.referencedObject;
+    if (ref) {
+      console.log(`[Speckle] Model: "${m.name}", root: ${ref}`);
+      return ref;
     }
   }
-
-  throw new Error("No versions found in any model");
+  throw new Error("No versions found");
 }
 
-// ── Step 2: Scarica l'oggetto root e tutti i suoi figli (NDJSON) ──
-// L'endpoint /objects/:streamId/:objectId/download restituisce NDJSON:
-// ogni riga è un JSON con un oggetto Speckle.
-async function downloadObjectsNDJSON(rootObjectId: string): Promise<Record<string, unknown>[]> {
-  // Speckle usa ancora "streams" nell'API REST anche per i nuovi "projects"
-  const url = `${SPECKLE_SERVER}/api/getobjects/${PROJECT_ID}`;
-
-  // POST con lista di objectIds da scaricare (bulk download)
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${EMBED_TOKEN}`,
-      Accept: "text/plain",
-    },
-    body: JSON.stringify({ objects: JSON.stringify([rootObjectId]) }),
+// ── Step 2: scarica oggetto root per leggere __closure ───────
+async function getRootObject(rootId: string): Promise<Record<string, unknown>> {
+  // Endpoint v2 corretto per singolo oggetto
+  const res = await fetch(`${SERVER}/objects/${STREAM_ID}/${rootId}/single`, {
+    headers: AUTH,
   });
+  if (res.ok) return res.json();
 
-  if (!res.ok) {
-    // Fallback: prova l'endpoint legacy streams
-    return downloadObjectsLegacy(rootObjectId);
-  }
-
-  const text = await res.text();
-  return parseNDJSON(text);
-}
-
-async function downloadObjectsLegacy(rootObjectId: string): Promise<Record<string, unknown>[]> {
-  // Endpoint legacy che funziona anche con embed token
-  const url = `${SPECKLE_SERVER}/streams/${PROJECT_ID}/objects/${rootObjectId}/download`;
-
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${EMBED_TOKEN}`,
-    },
+  // Fallback: usa l'endpoint legacy streams
+  const res2 = await fetch(`${SERVER}/streams/${STREAM_ID}/objects/${rootId}`, {
+    headers: AUTH,
   });
+  if (res2.ok) return res2.json();
 
-  if (!res.ok) {
-    throw new Error(`Object download failed: ${res.status} ${res.statusText}`);
-  }
-
-  const text = await res.text();
-  return parseNDJSON(text);
+  throw new Error(`Cannot fetch root object: ${res.status}`);
 }
 
-function parseNDJSON(text: string): Record<string, unknown>[] {
-  const results: Record<string, unknown>[] = [];
+// ── Step 3: bulk download NDJSON via endpoint ufficiale ──────
+// POST /api/getobjects/{streamId}
+// body: { objects: '["id1","id2",...]' }   ← stringa JSON di array
+async function bulkDownload(ids: string[]): Promise<Record<string, unknown>[]> {
+  if (ids.length === 0) return [];
 
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (parsed && typeof parsed === "object") {
-        results.push(parsed as Record<string, unknown>);
-      }
-    } catch {
-      // riga non valida, skip
+  const BATCH_SIZE = 500;
+  const all: Record<string, unknown>[] = [];
+
+  for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+    const batch = ids.slice(i, i + BATCH_SIZE);
+    const res = await fetch(`${SERVER}/api/getobjects/${STREAM_ID}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/plain",
+        ...AUTH,
+      },
+      body: JSON.stringify({ objects: JSON.stringify(batch) }),
+    });
+
+    if (!res.ok) {
+      console.warn(`[Speckle] Batch ${i} failed: ${res.status} ${res.statusText}`);
+      continue;
     }
+
+    const text = await res.text();
+    const parsed = parseNDJSON(text);
+    all.push(...parsed);
+    console.log(`[Speckle] Batch ${i}–${i + batch.length}: ${parsed.length} objects`);
   }
 
-  return results;
+  return all;
 }
 
-// ── Step 3: Segui i riferimenti __closure per caricare gli oggetti figli ──
-// Speckle serializza oggetti complessi come riferimenti { referencedId, speckle_type: "reference" }
-// Il download bulk li include automaticamente, ma se mancassero si può fare
-// un secondo fetch. In questo caso il download NDJSON li include già tutti.
-
-// ── API principale: fetch dati BIM reali ─────────────────────────────────
+// ── API pubblica ─────────────────────────────────────────────
 export async function fetchBimObjects(): Promise<BimObject[]> {
   console.log("[Speckle] Fetching real BIM data...");
 
-  // Step 1: ottieni root object ID
-  const rootObjectId = await getLatestRootObjectId();
+  // 1. Root object ID
+  const rootId = await getRootObjectId();
 
-  // Step 2: scarica tutti gli oggetti
-  const rawObjects = await downloadObjectsNDJSON(rootObjectId);
-  console.log(`[Speckle] Downloaded ${rawObjects.length} raw objects`);
+  // 2. Root object → __closure (mappa di tutti i child IDs)
+  const rootObj = await getRootObject(rootId);
+  const closure = rootObj.__closure as Record<string, number> | undefined;
+  const childIds = closure ? Object.keys(closure) : [];
+  console.log(`[Speckle] __closure has ${childIds.length} IDs`);
 
-  if (rawObjects.length === 0) {
-    throw new Error("No objects received from Speckle API");
+  // 3. Download bulk (include root + tutti i children)
+  const allIds = [rootId, ...childIds];
+  const rawObjects = await bulkDownload(allIds);
+  console.log(`[Speckle] Downloaded ${rawObjects.length} objects total`);
+
+  // 4. Debug: tutti i tipi presenti
+  const allTypes = new Set<string>();
+  for (const o of rawObjects) {
+    const t = o.speckle_type as string | undefined;
+    if (t) allTypes.add(t);
   }
+  console.log("[Speckle] Types in model:", [...allTypes]);
 
-  // Step 3: normalizza e filtra solo gli elementi BIM
-  const bimObjects: BimObject[] = [];
+  // 5. Filtra e normalizza
   const seen = new Set<string>();
+  const bimObjects: BimObject[] = [];
 
   for (const raw of rawObjects) {
-    const obj = normalizeObject(raw);
-    if (!obj) continue;
-    if (seen.has(obj.id)) continue;
+    const obj = normalizeObject(raw as Record<string, unknown>);
+    if (!obj || seen.has(obj.id)) continue;
     seen.add(obj.id);
     bimObjects.push(obj);
   }
 
-  console.log(`[Speckle] Extracted ${bimObjects.length} BIM elements`);
-
-  // Log distribuzione per debug
-  const cats: Record<string, number> = {};
-  for (const o of bimObjects) {
-    cats[o.category] = (cats[o.category] ?? 0) + 1;
-  }
-  console.log("[Speckle] Categories:", cats);
+  console.log(`[Speckle] BIM elements extracted: ${bimObjects.length}`);
 
   if (bimObjects.length === 0) {
-    // Nessun elemento BuiltElements trovato — logga tutti i tipi per debug
-    const types = new Set(
-      rawObjects
-        .map((o) => o.speckle_type as string)
-        .filter(Boolean)
-    );
-    console.warn("[Speckle] No BIM elements found. Types in model:", [...types]);
     throw new Error(
-      `No BIM elements found. Available types: ${[...types].slice(0, 10).join(", ")}`
+      `No BIM elements found among ${rawObjects.length} objects. ` +
+      `speckle_types: ${[...allTypes].slice(0, 12).join(", ")}`
     );
   }
 
