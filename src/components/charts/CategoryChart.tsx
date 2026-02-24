@@ -1,11 +1,5 @@
-// ============================================================
 // FILE: src/components/charts/CategoryChart.tsx
-// MODIFICATO: cross-filtering con LevelChart
-// ============================================================
-// Quando LevelChart ha filtri attivi, le barre di questa chart
-// mostrano solo il conteggio degli elementi che passano il filtro
-// livelli. Le barre con 0 elementi vengono opacizzate.
-// ============================================================
+// Fixed: expanded color map + groups small categories into "Other" to avoid X-axis clutter
 
 import { useMemo, useCallback } from "react";
 import {
@@ -21,42 +15,64 @@ import {
 import { useBimStore } from "@/store/bimStore";
 import { X } from "lucide-react";
 
+// Expanded color map covering IFC + Revit categories
 const CATEGORY_COLORS: Record<string, string> = {
-  Wall:     "#3b82f6",
-  Floor:    "#8b5cf6",
-  Column:   "#06b6d4",
-  Beam:     "#10b981",
-  Roof:     "#f59e0b",
-  Window:   "#ec4899",
-  Door:     "#f97316",
-  Stair:    "#84cc16",
-  Other:    "#94a3b8",
+  Wall:           "#3b82f6",
+  Floor:          "#8b5cf6",
+  Column:         "#06b6d4",
+  Beam:           "#10b981",
+  Roof:           "#f59e0b",
+  Window:         "#ec4899",
+  Door:           "#f97316",
+  Stair:          "#84cc16",
+  Ceiling:        "#a78bfa",
+  Furniture:      "#fb7185",
+  Railing:        "#34d399",
+  MEP:            "#f43f5e",
+  Site:           "#16a34a",
+  Room:           "#0ea5e9",
+  Infrastructure: "#d97706",
+  Vegetation:     "#22c55e",
+  Sign:           "#e879f9",
+  Opening:        "#64748b",
+  Foundation:     "#92400e",
+  Member:         "#10b981",
+  Generic:        "#6b7280",
+  Other:          "#475569",
 };
 
 const getColor = (category: string) => CATEGORY_COLORS[category] ?? "#94a3b8";
+
+// How many individual categories to show before collapsing into "Other"
+const MAX_BARS = 14;
 
 const CustomTooltip = ({
   active,
   payload,
 }: {
   active?: boolean;
-  payload?: Array<{ payload: { category: string; count: number; filteredCount: number; volume: number } }>;
+  payload?: Array<{ payload: { category: string; count: number; filteredCount: number; volume: number; isOther?: boolean; subCategories?: string[] } }>;
 }) => {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload;
   const hasLevelFilter = d.filteredCount !== d.count;
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs shadow-xl">
+    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs shadow-xl max-w-[200px]">
       <p className="font-semibold text-white mb-1">{d.category}</p>
       {hasLevelFilter ? (
         <>
-          <p className="text-blue-300">{d.filteredCount} elementi (filtrati)</p>
-          <p className="text-gray-500">{d.count} elementi totali</p>
+          <p className="text-blue-300">{d.filteredCount} elements (filtered)</p>
+          <p className="text-gray-500">{d.count} total</p>
         </>
       ) : (
-        <p className="text-gray-300">{d.count} elementi</p>
+        <p className="text-gray-300">{d.count} elements</p>
       )}
-      <p className="text-gray-400">{d.volume.toFixed(0)} m³ totali</p>
+      {d.volume > 0 && <p className="text-gray-400">{d.volume.toFixed(0)} m³</p>}
+      {d.subCategories && d.subCategories.length > 0 && (
+        <p className="text-gray-600 mt-1 text-[9px] leading-tight">
+          {d.subCategories.slice(0, 8).join(", ")}{d.subCategories.length > 8 ? "…" : ""}
+        </p>
+      )}
     </div>
   );
 };
@@ -71,15 +87,13 @@ export const CategoryChart = () => {
     setSelectedIds,
   } = useBimStore();
 
-  // Set degli ID che passano il filtro livelli (per cross-filtering)
   const levelFilteredSet = useMemo(() => {
     if (activeFilters.levels.length === 0) return null;
     return new Set(filteredIdsExcludeLevels);
   }, [activeFilters.levels, filteredIdsExcludeLevels]);
 
-  // Aggregazione per categoria
-  // count totale + filteredCount (rispettando filtro livelli)
-  const data = useMemo(() => {
+  // Aggregate by category
+  const rawData = useMemo(() => {
     const map = new Map<string, { count: number; filteredCount: number; volume: number; ids: string[] }>();
 
     bimObjects.forEach((obj) => {
@@ -98,11 +112,29 @@ export const CategoryChart = () => {
       .sort((a, b) => b.count - a.count);
   }, [bimObjects, levelFilteredSet]);
 
+  // Collapse small categories beyond MAX_BARS into "Other"
+  const data = useMemo(() => {
+    if (rawData.length <= MAX_BARS) return rawData.map((d) => ({ ...d, subCategories: undefined, isOther: false }));
+
+    const main = rawData.slice(0, MAX_BARS - 1);
+    const rest = rawData.slice(MAX_BARS - 1);
+    const otherEntry = {
+      category: "Other",
+      count: rest.reduce((s, d) => s + d.count, 0),
+      filteredCount: rest.reduce((s, d) => s + d.filteredCount, 0),
+      volume: rest.reduce((s, d) => s + d.volume, 0),
+      ids: rest.flatMap((d) => d.ids),
+      subCategories: rest.map((d) => d.category),
+      isOther: true,
+    };
+    return [...main.map((d) => ({ ...d, subCategories: undefined, isOther: false })), otherEntry];
+  }, [rawData]);
+
   const activeCategories = activeFilters.categories;
-  const hasLevelFilter = activeFilters.levels.length > 0;
+  const hasLevelFilter   = activeFilters.levels.length > 0;
 
   const handleBarClick = useCallback(
-    (entry: { category: string; ids: string[] }) => {
+    (entry: { category: string; ids: string[]; isOther?: boolean }) => {
       const current = activeFilters.categories;
       const isActive = current.includes(entry.category);
 
@@ -111,45 +143,28 @@ export const CategoryChart = () => {
         setFilter("categories", next);
         if (next.length === 0) setSelectedIds([], "chart");
         else {
-          const ids = data
-            .filter((d) => next.includes(d.category))
-            .flatMap((d) => d.ids);
+          const ids = rawData.filter((d) => next.includes(d.category)).flatMap((d) => d.ids);
           setSelectedIds(ids, "chart");
         }
       } else {
         const next = [...current, entry.category];
         setFilter("categories", next);
-        // Seleziona solo gli ID che passano anche il filtro livelli
-        const ids = levelFilteredSet
-          ? entry.ids.filter((id) => levelFilteredSet.has(id))
-          : entry.ids;
+        const ids = levelFilteredSet ? entry.ids.filter((id) => levelFilteredSet.has(id)) : entry.ids;
         setSelectedIds(ids, "chart");
       }
     },
-    [activeFilters.categories, data, setFilter, setSelectedIds, levelFilteredSet]
+    [activeFilters.categories, rawData, setFilter, setSelectedIds, levelFilteredSet]
   );
 
   const getBarColor = (entry: { category: string; ids: string[]; filteredCount: number }) => {
-    // Se c'è un filtro livelli e questa categoria non ha elementi → grigio scuro
     if (hasLevelFilter && entry.filteredCount === 0) return "#1e293b";
-
     if (activeCategories.length > 0) {
-      return activeCategories.includes(entry.category)
-        ? getColor(entry.category)
-        : "#1e293b";
+      return activeCategories.includes(entry.category) ? getColor(entry.category) : "#1e293b";
     }
     if (selectedIds.size > 0) {
-      const hasSelected = entry.ids.some((id) => selectedIds.has(id));
-      return hasSelected ? getColor(entry.category) : "#1e293b";
+      return entry.ids.some((id) => selectedIds.has(id)) ? getColor(entry.category) : "#1e293b";
     }
     return getColor(entry.category);
-  };
-
-  // Opacity barra: se c'è filtro livelli, mostra la proporzione filtrata
-  const getBarOpacity = (entry: { filteredCount: number; count: number }) => {
-    if (!hasLevelFilter) return 1;
-    if (entry.count === 0) return 0.15;
-    return Math.max(0.15, entry.filteredCount / entry.count);
   };
 
   return (
@@ -158,21 +173,15 @@ export const CategoryChart = () => {
         <div>
           <h3 className="text-sm font-semibold text-gray-100">Elementi per Categoria</h3>
           <p className="text-xs text-gray-500 mt-0.5">
-            {hasLevelFilter
-              ? "Filtrato per piano · clicca per selezionare"
-              : "Clicca per filtrare il modello 3D"}
+            {hasLevelFilter ? "Filtrato per piano · clicca per selezionare" : "Clicca per filtrare il modello 3D"}
           </p>
         </div>
         {activeCategories.length > 0 && (
           <button
-            onClick={() => {
-              setFilter("categories", []);
-              setSelectedIds([], "chart");
-            }}
+            onClick={() => { setFilter("categories", []); setSelectedIds([], "chart"); }}
             className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
           >
-            <X className="h-3 w-3" />
-            Reset
+            <X className="h-3 w-3" /> Reset
           </button>
         )}
       </div>
@@ -184,30 +193,24 @@ export const CategoryChart = () => {
             margin={{ top: 4, right: 8, left: -20, bottom: 0 }}
             onClick={(e) => {
               if (e?.activePayload?.[0]) {
-                handleBarClick(
-                  e.activePayload[0].payload as { category: string; ids: string[] }
-                );
+                handleBarClick(e.activePayload[0].payload as { category: string; ids: string[]; isOther?: boolean });
               }
             }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
             <XAxis
               dataKey="category"
-              tick={{ fill: "#64748b", fontSize: 10 }}
+              tick={{ fill: "#64748b", fontSize: 9 }}
               axisLine={false}
               tickLine={false}
               interval={0}
-              angle={-30}
+              angle={-35}
               textAnchor="end"
-              height={45}
+              height={55}
             />
-            <YAxis
-              tick={{ fill: "#64748b", fontSize: 10 }}
-              axisLine={false}
-              tickLine={false}
-            />
+            <YAxis tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
-            {/* Barra di sfondo (totale) quando c'è filtro livelli */}
+
             {hasLevelFilter && (
               <Bar dataKey="count" radius={[4, 4, 0, 0]} cursor="pointer" opacity={0.15}>
                 {data.map((entry) => (
@@ -215,17 +218,9 @@ export const CategoryChart = () => {
                 ))}
               </Bar>
             )}
-            {/* Barra principale (filtrata o totale) */}
-            <Bar
-              dataKey={hasLevelFilter ? "filteredCount" : "count"}
-              radius={[4, 4, 0, 0]}
-              cursor="pointer"
-            >
+            <Bar dataKey={hasLevelFilter ? "filteredCount" : "count"} radius={[4, 4, 0, 0]} cursor="pointer">
               {data.map((entry) => (
-                <Cell
-                  key={entry.category}
-                  fill={getBarColor(entry)}
-                />
+                <Cell key={entry.category} fill={getBarColor(entry)} />
               ))}
             </Bar>
           </BarChart>
