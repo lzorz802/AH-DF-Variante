@@ -1,10 +1,9 @@
 // ============================================================
 // FILE: src/components/bim/SpeckleViewer.tsx
-// Usa l'API corretta di @speckle/viewer 2.x
-// Fix bundler: carica via import() con keepNames esbuild config
+// Versione con debug panel visibile per diagnosticare il filtering
 // ============================================================
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useBimStore } from "@/store/bimStore";
 import { fetchBimObjects } from "@/lib/speckleExtractor";
 import { Loader2, AlertCircle, RotateCcw } from "lucide-react";
@@ -16,7 +15,16 @@ export const SpeckleViewer = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const viewerRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const filteringExtRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const selectionExtRef = useRef<any>(null);
   const isInitialized = useRef(false);
+  const [debugLines, setDebugLines] = useState<string[]>([]);
+
+  const log = (msg: string) => {
+    setDebugLines((prev) => [...prev.slice(-6), msg]);
+  };
 
   const {
     setSelectedIds,
@@ -37,8 +45,12 @@ export const SpeckleViewer = () => {
     setLoadError(null);
 
     try {
-      // Import con /* @vite-ignore */ per evitare pre-bundling
+      log("Importing @speckle/viewer...");
       const speckle = await import(/* @vite-ignore */ "@speckle/viewer");
+
+      // Log delle chiavi disponibili nel modulo
+      const keys = Object.keys(speckle).join(", ");
+      log("Exports: " + keys.slice(0, 120));
 
       const {
         Viewer,
@@ -52,22 +64,34 @@ export const SpeckleViewer = () => {
       } = speckle;
 
       if (!Viewer || !DefaultViewerParams) {
-        throw new Error("@speckle/viewer non caricato correttamente");
+        throw new Error("Viewer/DefaultViewerParams mancanti");
       }
 
-      // Crea viewer
+      log("Creating viewer...");
       const params = { ...DefaultViewerParams, showStats: false, verbose: false };
       const viewer = new Viewer(containerRef.current, params);
       await viewer.init();
       viewerRef.current = viewer;
+      log("Viewer init OK");
 
-      // Registra le estensioni necessarie
       viewer.createExtension(CameraController);
 
-      if (SelectionExtension) {
-        const selection = viewer.createExtension(SelectionExtension);
+      if (FilteringExtension) {
+        filteringExtRef.current = viewer.createExtension(FilteringExtension);
+        // Log dei metodi disponibili sull'estensione
+        const methods = Object.getOwnPropertyNames(
+          Object.getPrototypeOf(filteringExtRef.current)
+        ).join(", ");
+        log("FilteringExt methods: " + methods.slice(0, 150));
+      } else {
+        log("FilteringExtension NOT FOUND in module");
+      }
 
-        // Handler selezione oggetti → aggiorna store
+      if (SelectionExtension) {
+        selectionExtRef.current = viewer.createExtension(SelectionExtension);
+      }
+
+      if (ViewerEvent) {
         viewer.on(ViewerEvent.ObjectClicked, (event: unknown) => {
           const e = event as { hits?: Array<{ node?: { model?: { raw?: { id?: string } } } }> };
           const ids = (e?.hits ?? [])
@@ -75,30 +99,25 @@ export const SpeckleViewer = () => {
             .filter((id): id is string => Boolean(id));
           setSelectedIds(ids, "viewer");
         });
-
-        void selection; // evita warning unused
       }
 
-      if (FilteringExtension) {
-        viewer.createExtension(FilteringExtension);
-      }
-
-      // Carica il modello usando UrlHelper + SpeckleLoader (API 2.x corretta)
+      log("Loading model...");
       const urls = await UrlHelper.getResourceUrls(PROJECT_URL, EMBED_TOKEN);
+      log(`URLs: ${urls.length}`);
       for (const url of urls) {
         const loader = new SpeckleLoader(viewer.getWorldTree(), url, EMBED_TOKEN);
         await viewer.loadObject(loader, true);
       }
+      log("Model loaded OK");
 
-      // Carica dati BIM per i grafici
       const objects = await fetchBimObjects();
       setBimObjects(objects);
+      log(`BIM objects: ${objects.length}`);
 
     } catch (err) {
-      console.error("Speckle viewer init failed:", err);
-      setLoadError(
-        err instanceof Error ? err.message : "Impossibile caricare il viewer 3D."
-      );
+      const msg = err instanceof Error ? err.message : String(err);
+      log("ERROR: " + msg);
+      setLoadError(msg);
       try {
         const objects = await fetchBimObjects();
         setBimObjects(objects);
@@ -113,35 +132,64 @@ export const SpeckleViewer = () => {
     return () => {
       if (viewerRef.current?.dispose) viewerRef.current.dispose();
       viewerRef.current = null;
+      filteringExtRef.current = null;
+      selectionExtRef.current = null;
       isInitialized.current = false;
     };
   }, [initViewer]);
 
   // Filtri dai grafici → isola oggetti nel 3D
   useEffect(() => {
-    const viewer = viewerRef.current;
-    if (!viewer) return;
+    const filtering = filteringExtRef.current;
+    if (!filtering) {
+      if (filteredIds.length > 0) log("FILTER: no filteringExt ref!");
+      return;
+    }
+
+    log(`FILTER: ${filteredIds.length} IDs, methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(filtering)).join(",")}`);
+
     try {
       if (filteredIds.length > 0) {
-        viewer.getExtension?.("FilteringExtension")?.isolateObjects?.(filteredIds);
+        // Prova i vari nomi di metodo possibili
+        if (typeof filtering.isolateObjects === "function") {
+          filtering.isolateObjects(filteredIds, "filters", true);
+          log("Called isolateObjects OK");
+        } else if (typeof filtering.setFilters === "function") {
+          filtering.setFilters({ filterBy: { id: filteredIds } });
+          log("Called setFilters OK");
+        } else if (typeof filtering.filter === "function") {
+          filtering.filter({ ids: filteredIds });
+          log("Called filter OK");
+        } else {
+          log("No known filter method found!");
+        }
       } else {
-        viewer.getExtension?.("FilteringExtension")?.resetFilters?.();
+        if (typeof filtering.resetFilters === "function") {
+          filtering.resetFilters();
+          log("Called resetFilters OK");
+        } else if (typeof filtering.reset === "function") {
+          filtering.reset();
+          log("Called reset OK");
+        }
       }
-    } catch { /* ignore */ }
+    } catch (e) {
+      log("Filter ERROR: " + String(e));
+    }
   }, [filteredIds]);
 
   // Selezione dai grafici → highlight nel 3D
   useEffect(() => {
-    const viewer = viewerRef.current;
-    if (!viewer || lastSelectionSource !== "chart") return;
+    const selection = selectionExtRef.current;
+    if (!selection || lastSelectionSource !== "chart") return;
     try {
-      viewer.getExtension?.("SelectionExtension")?.selectObjects?.([...selectedIds]);
+      selection.selectObjects([...selectedIds]);
     } catch { /* ignore */ }
   }, [selectedIds, lastSelectionSource]);
 
   const handleReset = () => {
     try {
-      viewerRef.current?.getExtension?.("CameraController")?.setCameraView("default");
+      filteringExtRef.current?.resetFilters?.();
+      selectionExtRef.current?.clearSelection?.();
     } catch { /* ignore */ }
     useBimStore.getState().clearFilters();
     useBimStore.getState().clearSelection();
@@ -155,7 +203,6 @@ export const SpeckleViewer = () => {
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1f2e]/90 z-10">
           <Loader2 className="h-8 w-8 animate-spin text-blue-400 mb-3" />
           <p className="text-sm text-blue-200 font-medium">Caricamento modello BIM…</p>
-          <p className="text-xs text-blue-300/60 mt-1">Connessione a Speckle in corso</p>
         </div>
       )}
 
@@ -163,7 +210,6 @@ export const SpeckleViewer = () => {
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#1a1f2e]/95 z-10 p-6">
           <AlertCircle className="h-8 w-8 text-amber-400 mb-3" />
           <p className="text-sm text-amber-200 font-medium text-center mb-1">Viewer non disponibile</p>
-          <p className="text-xs text-slate-400 text-center mb-4">I grafici mostrano i dati BIM del modello</p>
           <p className="text-xs text-slate-500 text-center font-mono bg-slate-800 px-3 py-2 rounded max-w-xs break-all">
             {loadError}
           </p>
@@ -172,13 +218,18 @@ export const SpeckleViewer = () => {
 
       {!isLoading && (
         <div className="absolute top-3 right-3 z-10">
-          <button
-            onClick={handleReset}
-            title="Reset filtri e camera"
-            className="p-2 rounded-lg bg-black/40 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white hover:bg-black/60 transition-all"
-          >
+          <button onClick={handleReset} className="p-2 rounded-lg bg-black/40 backdrop-blur-sm border border-white/10 text-white/70 hover:text-white transition-all">
             <RotateCcw className="h-4 w-4" />
           </button>
+        </div>
+      )}
+
+      {/* DEBUG PANEL - visibile in basso a sinistra */}
+      {debugLines.length > 0 && (
+        <div className="absolute bottom-8 left-2 right-2 z-20 bg-black/80 rounded p-2 max-h-40 overflow-y-auto">
+          {debugLines.map((line, i) => (
+            <p key={i} className="text-[10px] font-mono text-green-300 leading-tight">{line}</p>
+          ))}
         </div>
       )}
 
