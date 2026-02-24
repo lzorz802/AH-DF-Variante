@@ -72,6 +72,41 @@ function levelFromProperties(props: Record<string, any>): string {
   return "Unknown";
 }
 
+// ── NEW: Extract area & volume from Speckle V3 materialQuantities ────────────
+// materialQuantities = {
+//   "MaterialName": {
+//     area:   { value: number, units: string },
+//     volume: { value: number, units: string },
+//     ...
+//   },
+//   ...
+// }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractFromMaterialQuantities(mq: Record<string, any>): { area: number; volume: number } | null {
+  let totalArea = 0;
+  let totalVolume = 0;
+  let found = false;
+
+  for (const matKey of Object.keys(mq)) {
+    const mat = mq[matKey];
+    if (!mat || typeof mat !== "object") continue;
+
+    // area
+    if (mat.area && typeof mat.area === "object" && typeof mat.area.value === "number") {
+      totalArea += mat.area.value;
+      found = true;
+    }
+    // volume
+    if (mat.volume && typeof mat.volume === "object" && typeof mat.volume.value === "number") {
+      totalVolume += mat.volume.value;
+      found = true;
+    }
+  }
+
+  if (!found) return null;
+  return { area: totalArea, volume: totalVolume };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function bimObjectFromRaw(raw: Record<string, any>): BimObject | null {
   const id = String(raw.id ?? raw.applicationId ?? "");
@@ -98,15 +133,51 @@ function bimObjectFromRaw(raw: Record<string, any>): BimObject | null {
     flat["material"] ?? flat["Material"] ??
     flat["MATERIAL_ASSET_PARAM"] ?? flat["STRUCTURAL_MATERIAL_PARAM"] ?? "Unknown"
   ).trim();
-  const volume = Number(flat["volume"] ?? flat["Volume"] ?? flat["HOST_VOLUME_COMPUTED"] ?? 0);
-  const area = Number(flat["area"] ?? flat["Area"] ?? flat["HOST_AREA_COMPUTED"] ?? 0);
   const name = String(flat["name"] ?? flat["Name"] ?? flat["mark"] ?? flat["Mark"] ?? id.slice(0, 12));
+
+  // ── MODIFIED: area & volume extraction ───────────────────────────────────
+  // Step 1: Try materialQuantities (Speckle V3 / Next-Gen connectors)
+  let volume = 0;
+  let area = 0;
+
+  const mq = raw.materialQuantities;
+  if (mq && typeof mq === "object" && !Array.isArray(mq)) {
+    const mqResult = extractFromMaterialQuantities(mq);
+    if (mqResult !== null) {
+      area = mqResult.area;
+      volume = mqResult.volume;
+      console.log(
+        `[BIM][materialQuantities] id=${id.slice(0, 8)} area=${area.toFixed(2)} volume=${volume.toFixed(2)}`
+      );
+    } else {
+      // materialQuantities exists but had no readable values — fall through to legacy
+      console.warn(`[BIM][materialQuantities] id=${id.slice(0, 8)} — found but no numeric values`);
+    }
+  }
+
+  // Step 2: Fallback to legacy flat params if materialQuantities gave nothing
+  if (area === 0 && volume === 0) {
+    const legacyVolume = Number(flat["volume"] ?? flat["Volume"] ?? flat["HOST_VOLUME_COMPUTED"] ?? 0);
+    const legacyArea   = Number(flat["area"]   ?? flat["Area"]   ?? flat["HOST_AREA_COMPUTED"]   ?? 0);
+    volume = isNaN(legacyVolume) ? 0 : legacyVolume;
+    area   = isNaN(legacyArea)   ? 0 : legacyArea;
+    if (volume > 0 || area > 0) {
+      console.log(
+        `[BIM][legacy params] id=${id.slice(0, 8)} area=${area.toFixed(2)} volume=${volume.toFixed(2)}`
+      );
+    }
+  }
+
+  // Step 3: Final NaN guard
+  if (isNaN(volume)) volume = 0;
+  if (isNaN(area))   area   = 0;
+  // ── END MODIFIED ─────────────────────────────────────────────────────────
 
   return {
     id, speckleType, category, level,
     material: material || "Unknown",
-    volume: isNaN(volume) ? 0 : volume,
-    area: isNaN(area) ? 0 : area,
+    volume,
+    area,
     family: flat["family"] ?? flat["Family"] ?? undefined,
     mark: name,
   };
@@ -212,6 +283,15 @@ async function extractFromViewer(viewer: any, logFn: (msg: string) => void): Pro
     console.log(`  ALL keys: ${Object.keys(r).join(", ")}`);
     console.log(`  category: ${r.category ?? r.Category ?? "(mancante)"}`);
     console.log(`  level: ${r.level ?? r.Level ?? "(mancante)"}`);
+    // ── NEW: log materialQuantities presence for debugging
+    console.log(`  materialQuantities: ${r.materialQuantities ? "PRESENT ✅" : "absent"}`);
+    if (r.materialQuantities && typeof r.materialQuantities === "object") {
+      console.log(`  materialQuantities keys: ${Object.keys(r.materialQuantities).slice(0, 5).join(", ")}`);
+      const firstKey = Object.keys(r.materialQuantities)[0];
+      if (firstKey) {
+        console.log(`  materialQuantities["${firstKey}"]:`, JSON.stringify(r.materialQuantities[firstKey]).slice(0, 200));
+      }
+    }
     console.log(`  FULL JSON (1500 chars): ${JSON.stringify(r).slice(0, 1500)}`);
   }
 
@@ -235,6 +315,13 @@ async function extractFromViewer(viewer: any, logFn: (msg: string) => void): Pro
   const catDist: Record<string, number> = {};
   for (const o of objects) catDist[o.category] = (catDist[o.category] ?? 0) + 1;
   console.log("[BIM] Category distribution:", JSON.stringify(catDist, null, 2));
+
+  // ── NEW: log area/volume summary
+  const totalArea = objects.reduce((s, o) => s + o.area, 0);
+  const totalVolume = objects.reduce((s, o) => s + o.volume, 0);
+  const withArea = objects.filter((o) => o.area > 0).length;
+  const withVolume = objects.filter((o) => o.volume > 0).length;
+  console.log(`[BIM] Area/Volume summary: totalArea=${totalArea.toFixed(1)}m² (${withArea} elements), totalVolume=${totalVolume.toFixed(1)}m³ (${withVolume} elements)`);
 
   return objects;
 }
