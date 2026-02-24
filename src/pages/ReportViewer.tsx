@@ -1,4 +1,16 @@
+// ============================================================
+// FILE: src/pages/ReportViewer.tsx  (FILE MODIFICATO)
+// ============================================================
+// MODIFICA: il report id="5" (Speckle BIM) ora reindirizza
+// alla pagina BimDashboard invece di caricare l'iframe.
+//
+// DIFF rispetto all'originale:
+//   + import { useEffect } from "react"
+//   + blocco redirect per id === "5"
+// ============================================================
+
 import { useParams, useNavigate } from "react-router-dom";
+import { useEffect } from "react";           // ← AGGIUNTO
 import { ArrowLeft } from "lucide-react";
 import { reports } from "@/data/reports";
 
@@ -7,12 +19,25 @@ const ReportViewer = () => {
   const navigate = useNavigate();
   const report = reports.find((r) => r.id === id);
 
+  // ── AGGIUNTO: redirect BIM report → BimDashboard ─────────
+  useEffect(() => {
+    if (id === "5") {
+      navigate("/bim-dashboard", { replace: true });
+    }
+  }, [id, navigate]);
+  // ─────────────────────────────────────────────────────────
+
   if (!report) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <p className="text-muted-foreground">Report not found.</p>
       </div>
     );
+  }
+
+  // id === "5" reindirizza via useEffect, questo blocco non viene mai mostrato
+  if (id === "5") {
+    return null;
   }
 
   return (
