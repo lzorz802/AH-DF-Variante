@@ -9,13 +9,13 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // Fix per @speckle/viewer: impedisce la minificazione dei nomi di classe
-  // che causa "Could not get Extension of type $h/$l"
   optimizeDeps: {
     exclude: ["@speckle/viewer", "@speckle/shared"],
     esbuildOptions: {
-      // Disabilita il mangling dei nomi anche durante il pre-bundling esbuild
-      minifyIdentifiers: false,
+      // FIX CHIAVE: preserva i nomi delle classi JS
+      // @speckle/viewer usa constructor.name per trovare le estensioni
+      // Senza questo, esbuild rinomina le classi ($h, $l, Oa, ecc.)
+      keepNames: true,
     },
   },
   build: {
@@ -26,7 +26,7 @@ export default defineConfig({
     },
   },
   esbuild: {
-    // Disabilita il mangling degli identificatori anche in dev mode
-    minifyIdentifiers: false,
+    // Preserva i nomi anche durante il transform in dev mode
+    keepNames: true,
   },
 });
