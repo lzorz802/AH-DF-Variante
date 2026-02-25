@@ -2,7 +2,7 @@
 // Grafico area/volume aggregato in MACRO-CATEGORIE.
 // Mapping pensato per modelli civili/GIS/IFC misti.
 
-import { useMemo, useCallback, useState } from "react";
+import { useMemo, useCallback } from "react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Cell, ResponsiveContainer,
@@ -86,8 +86,6 @@ function getMacroGroup(category: string): string {
   return "altro";
 }
 
-type Metric = "area" | "volume" | "count";
-
 const CustomTooltip = ({
   active, payload,
 }: {
@@ -111,7 +109,6 @@ const CustomTooltip = ({
 
 export const AreaVolumeChart = () => {
   const { bimObjects, selectedIds, activeFilters, setFilter, setSelectedIds } = useBimStore();
-  const [metric, setMetric] = useState<Metric>("count");
 
   // Aggrega per macro-categoria
   const data = useMemo(() => {
@@ -143,16 +140,11 @@ export const AreaVolumeChart = () => {
         categories: [...v.categorySet].sort(),
       }))
       .filter((d) => d.count > 0)
-      .sort((a, b) => {
-        if (metric === "area") return b.area - a.area;
-        if (metric === "volume") return b.volume - a.volume;
-        return b.count - a.count;
-      });
-  }, [bimObjects, metric]);
+      .sort((a, b) => b.count - a.count);
+  }, [bimObjects]);
 
   // Le categorie Speckle che appartengono ai macro-gruppi attivi
   const activeMacroKeys = useMemo(() => {
-    // Ricava quali macro-gruppi sono attivi guardando le categorie nel filtro
     if (activeFilters.categories.length === 0) return [];
     const active = new Set<string>();
     for (const cat of activeFilters.categories) {
@@ -166,7 +158,6 @@ export const AreaVolumeChart = () => {
       const isActive = activeMacroKeys.includes(entry.key);
 
       if (isActive) {
-        // Deseleziona questo macro-gruppo: rimuovi le sue categorie dai filtri
         const nextCats = activeFilters.categories.filter(
           (c) => getMacroGroup(c) !== entry.key
         );
@@ -179,7 +170,6 @@ export const AreaVolumeChart = () => {
           setSelectedIds(ids, "chart");
         }
       } else {
-        // Attiva: aggiungi tutte le categorie di questo macro-gruppo
         const newCats = [...new Set([...activeFilters.categories, ...entry.categories])];
         setFilter("categories", newCats);
         setSelectedIds(entry.ids, "chart");
@@ -198,9 +188,6 @@ export const AreaVolumeChart = () => {
   const formatValue = (v: number) =>
     v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0);
 
-  const dataKey = metric === "area" ? "area" : metric === "volume" ? "volume" : "count";
-  const unit = metric === "area" ? " m²" : metric === "volume" ? " m³" : "";
-
   return (
     <div className="w-full h-full flex flex-col">
       {/* Header */}
@@ -218,23 +205,10 @@ export const AreaVolumeChart = () => {
               <X className="h-3 w-3" /> Reset
             </button>
           )}
-          {/* Toggle metrica */}
           <div className="flex rounded-md overflow-hidden border border-gray-700 text-[10px]">
-            {(["count", "area", "volume"] as Metric[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => setMetric(m)}
-                className={`px-2 py-1 transition-colors ${
-                  metric === m
-                    ? m === "area" ? "bg-blue-600 text-white"
-                    : m === "volume" ? "bg-purple-600 text-white"
-                    : "bg-gray-600 text-white"
-                    : "bg-gray-800 text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                {m === "count" ? "N°" : m === "area" ? "m²" : "m³"}
-              </button>
-            ))}
+            <button className="px-2 py-1 bg-gray-600 text-white">
+              N°
+            </button>
           </div>
         </div>
       </div>
@@ -270,12 +244,12 @@ export const AreaVolumeChart = () => {
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
             <Bar
-              dataKey={dataKey}
+              dataKey="count"
               radius={[0, 4, 4, 0]}
               cursor="pointer"
               label={{
                 position: "right",
-                formatter: (v: number) => v > 0 ? `${formatValue(v)}${unit}` : "",
+                formatter: (v: number) => v > 0 ? `${formatValue(v)}` : "",
                 fill: "#475569",
                 fontSize: 9,
               }}
