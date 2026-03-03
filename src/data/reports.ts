@@ -48,6 +48,14 @@ export const reports: Report[] = [
     tag: "operations",
     url: "https://app.speckle.systems/projects/a0102047d4/models/all?embedToken=0c70148e6c17a7848184ee9a7947313e5359b3bf70#embed=%7B%22isEnabled%22%3Atrue%7D",
   },
+  {
+    id: "6",
+    title: "Commesse DCL – Regione Lombardia",
+    description:
+      "Monitoraggio commesse della Direzione Centrale Lavori: 81 commesse attive, quota finanziamento pubblico e privato, distribuzione per DG e avanzamento per tipologia di incarico (Progettazione, Costruzione, Servizi e Concessioni).",
+    tag: "operations",
+    url: "https://app.powerbi.com/reportEmbed?reportId=b205ca9f-7bf3-4e43-b1cd-a9a1deb03110&autoAuth=true&ctid=deff24bb-2089-4400-8c8e-f71e680378b2",
+  },
 ];
 
 export const filterTabs = [
