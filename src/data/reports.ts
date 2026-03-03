@@ -47,10 +47,10 @@ const ReportViewer = () => {
             href={PBI_NATIVE_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-secondary transition-colors shrink-0"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#f2c811] hover:bg-[#e0b800] text-gray-900 text-sm font-medium transition-colors shrink-0"
           >
             <ExternalLink className="h-4 w-4" />
-            Apri in Power BI
+            Apri report con Copilot
           </a>
         )}
       </div>
