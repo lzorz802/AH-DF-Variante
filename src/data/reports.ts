@@ -1,68 +1,68 @@
-import { useParams, useNavigate } from "react-router-dom";
-import { useEffect } from "react";
-import { ArrowLeft, ExternalLink } from "lucide-react";
-import { reports } from "@/data/reports";
+export interface Report {
+  id: string;
+  title: string;
+  description: string;
+  tag: string;
+  url: string;
+  featured?: boolean;
+}
 
-const PBI_NATIVE_URL =
-  "https://app.powerbi.com/groups/me/reports/b205ca9f-7bf3-4e43-b1cd-a9a1deb03110";
+export const reports: Report[] = [
+  {
+    id: "1",
+    title: "HBenchmark – Advanced Sales Analytics",
+    description:
+      "Monitor RevPAR performance, daily analysis, competitive benchmarking and LYST trends for hotel structures.",
+    tag: "sales",
+    url: "https://app.fabric.microsoft.com/reportEmbed?reportId=14911e08-e17e-448c-9d81-8f7dc771b171&autoAuth=true&ctid=deff24bb-2089-4400-8c8e-f71e680378b2",
+    featured: true,
+  },
+  {
+    id: "2",
+    title: "CEE Report 2023 – Italia",
+    description:
+      "KPMG benchmark on customer experience excellence across 9 Italian industries. Tracks NPS, OmniIndex, Six Pillars, CEE Score and CEE Rank from 2017 to present.",
+    tag: "marketing",
+    url: "https://app.fabric.microsoft.com/reportEmbed?reportId=00c308c3-e8e6-40a6-87cd-fa2bded22d71&autoAuth=true&ctid=deff24bb-2089-4400-8c8e-f71e680378b2",
+  },
+  {
+    id: "3",
+    title: "Asset & Facility Monitoring – Regione Veneto",
+    description:
+      "Dashboard di monitoraggio di edifici, asset e manutenzioni delle strutture ospedaliere della Regione Veneto.",
+    tag: "operations",
+    url: "https://app.fabric.microsoft.com/reportEmbed?reportId=7404ad55-f269-42eb-b7f4-a9994d4e97ab&autoAuth=true&ctid=deff24bb-2089-4400-8c8e-f71e680378b2",
+  },
+  {
+    id: "4",
+    title: "Project & Works Monitoring – Regione Lombardia",
+    description:
+      "Dashboard di monitoraggio delle commesse e direzione lavori per la Regione Lombardia. Supervisione avanzamento progetti e KPI operativi.",
+    tag: "operations",
+    url: "https://app.fabric.microsoft.com/reportEmbed?reportId=baddae82-b173-4894-bec3-99c4052e2741&autoAuth=true&ctid=deff24bb-2089-4400-8c8e-f71e680378b2",
+  },
+  {
+    id: "5",
+    title: "Speckle BIM Viewer",
+    description: "Visualizzazione federata del modello BIM 3D con tutti i layer disciplinari sovrapposti.",
+    tag: "operations",
+    url: "https://app.speckle.systems/projects/a0102047d4/models/all?embedToken=0c70148e6c17a7848184ee9a7947313e5359b3bf70#embed=%7B%22isEnabled%22%3Atrue%7D",
+  },
+  {
+    id: "6",
+    title: "Commesse DCL – Regione Lombardia",
+    description:
+      "Monitoraggio commesse della Direzione Centrale Lavori: 81 commesse attive, quota finanziamento pubblico e privato, distribuzione per DG e avanzamento per tipologia di incarico (Progettazione, Costruzione, Servizi e Concessioni).",
+    tag: "operations",
+    url: "https://app.powerbi.com/reportEmbed?reportId=b205ca9f-7bf3-4e43-b1cd-a9a1deb03110&autoAuth=true&ctid=deff24bb-2089-4400-8c8e-f71e680378b2",
+  },
+];
 
-const ReportViewer = () => {
-  const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
-  const report = reports.find((r) => r.id === id);
-
-  useEffect(() => {
-    if (id === "5") {
-      navigate("/bim-dashboard", { replace: true });
-    }
-  }, [id, navigate]);
-
-  if (!report) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <p className="text-muted-foreground">Report not found.</p>
-      </div>
-    );
-  }
-
-  if (id === "5") return null;
-
-  return (
-    <div className="h-screen flex flex-col bg-background">
-      <div className="px-4 py-2 border-b border-border bg-card flex items-center gap-3">
-        <button
-          onClick={() => navigate("/")}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
-        </button>
-
-        <span className="text-sm font-semibold text-foreground truncate flex-1">
-          {report.title}
-        </span>
-
-        {id === "6" && (
-          <a
-            href={PBI_NATIVE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#f2c811] hover:bg-[#e0b800] text-gray-900 text-sm font-medium transition-colors shrink-0"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Apri report con Copilot
-          </a>
-        )}
-      </div>
-
-      <iframe
-        src={report.url}
-        title={report.title}
-        className="flex-1 w-full border-none"
-        allowFullScreen
-      />
-    </div>
-  );
-};
-
-export default ReportViewer;
+export const filterTabs = [
+  { label: "All Reports", value: "all" },
+  { label: "Sales", value: "sales" },
+  { label: "Finance", value: "finance" },
+  { label: "Operations", value: "operations" },
+  { label: "HR", value: "hr" },
+  { label: "Marketing", value: "marketing", icon: "flame" as const },
+];
