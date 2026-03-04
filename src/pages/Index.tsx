@@ -5,7 +5,6 @@ import ReportCard from "@/components/ReportCard";
 import { reports } from "@/data/reports";
 import { MessageCircle, X, Minus } from "lucide-react";
 
-// ── Sostituisci con l'URL ottenuto da Copilot Studio → Canali → App Web ──
 const COPILOT_IFRAME_URL = "https://copilotstudio.microsoft.com/environments/Default-2b8dac2b-9179-468b-9bd8-1fbf8bd844c7/bots/auto_agent_fT_Ih/webchat?__version__=2";
 
 // ── Widget agente Copilot ─────────────────────────────────────────────────
