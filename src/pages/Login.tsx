@@ -31,7 +31,7 @@ export default function Login() {
 
       <div className="relative w-full max-w-md rounded-2xl overflow-hidden" style={{ background: "rgba(255,255,255,0.04)", backdropFilter: "blur(24px)", border: "1px solid rgba(255,255,255,0.10)", boxShadow: "0 32px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
         <div className="px-8 pt-10 pb-8 text-center" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
-          <img src={kpmgLogo} alt="KPMG" className="h-9 mx-auto mb-6" style={{ filter: "brightness(0) invert(1)" }} />
+          <img src={kpmgLogo} alt="KPMG" className="h-9 mx-auto mb-6" />
           <h1 className="text-2xl font-semibold text-white tracking-tight">Analytics Portal</h1>
           <p className="text-sm text-white/45 mt-1.5">Accedi con le tue credenziali @kpmg.it</p>
         </div>
