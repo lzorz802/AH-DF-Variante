@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react";
-import kpmgLogo from "@/assets/kpmg-logo.png";
+import kpmgLogo from "@/assets/digital_factory_logo.png";
 
 export default function Login() {
   const { user, isLoading, signIn } = useAuth();
