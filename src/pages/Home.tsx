@@ -126,14 +126,18 @@ export default function Home() {
   return (
     <div className="min-h-screen" style={{ background: "#E8F0FE" }}>
       {/* Hero */}
-      <section className="relative overflow-hidden" style={{ minHeight: 600 }}>
+      <section className="relative overflow-hidden" style={{ minHeight: 420 }}>
         <img src={heroBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(13,27,110,0.85) 0%, rgba(13,27,110,0.6) 100%)" }} />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-4 pb-16">
+        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-4 pb-8">
           {/* Top bar */}
           <div className="flex items-start justify-between mb-6">
-            <img src={logoClean} alt="KPMG Digital Factory" style={{ height: "128px", width: "auto" }} />
+            <img
+              src={logoClean}
+              alt="KPMG Digital Factory"
+              style={{ width: "300px", height: "auto", transform: "scale(1.5)", transformOrigin: "left center" }}
+            />
             {user && (
               <div className="flex items-center gap-3 mt-4">
                 <div className="flex items-center gap-2 text-xs text-white/70">
@@ -152,7 +156,7 @@ export default function Home() {
           </div>
 
           {/* Hero text */}
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight max-w-3xl">
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-5xl whitespace-nowrap">
             Eccellenza digitale, dati, AI, UX
           </h1>
           <p className="mt-5 text-base md:text-lg text-white/80 max-w-3xl leading-relaxed">
