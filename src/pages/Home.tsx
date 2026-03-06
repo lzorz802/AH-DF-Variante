@@ -9,7 +9,7 @@ import { motion } from "framer-motion";
 
 const cards = [
   {
-    title: "Reporting",
+    title: "AI Performance Dashboard",
     subtitle: "Analisi delle prestazioni AI",
     icon: Settings,
     link: "/reports",
@@ -59,7 +59,6 @@ const values = [
   { icon: Users, label: "Multi-stakeholder" },
 ];
 
-/* ── Scroll animation hook ───────────────────────────────────── */
 function useInView(threshold = 0.15) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -76,26 +75,31 @@ function useInView(threshold = 0.15) {
   return { ref, visible };
 }
 
-/* ── Home Card ────────────────────────────────────────────────── */
 const HomeCard = ({ card }: { card: typeof cards[0] }) => {
   return (
     <Link
       to={card.link}
-      className="group rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1"
+      className="group relative flex flex-col overflow-hidden transition-all duration-300 hover:-translate-y-1"
       style={{
-        background: "#1A2B8C",
-        boxShadow: "0 8px 32px rgba(13,27,110,0.3)",
+        background: "linear-gradient(160deg, #1a3a8f 0%, #0d1b6e 60%, #0a1550 100%)",
+        boxShadow: "0 8px 32px rgba(13,27,110,0.4)",
+        borderRadius: "1rem 1rem 1rem 0",
       }}
     >
+      {/* Preview image */}
       <div className="p-4 pb-0">
         <div className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
-          <img src={dashboardPreview} alt={card.title}
-            className="w-full h-44 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity" />
+          <img
+            src={dashboardPreview}
+            alt={card.title}
+            className="w-full h-48 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity"
+          />
         </div>
       </div>
 
-      <div className="p-5 pt-4">
-        <div className="flex items-start gap-3 mb-1">
+      {/* Content */}
+      <div className="p-5 pt-4 flex-1">
+        <div className="flex items-start gap-3">
           <card.icon className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#00AEEF" }} />
           <div>
             <h3 className="text-base font-bold text-white leading-snug">{card.title}</h3>
@@ -104,19 +108,25 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
         </div>
       </div>
 
+      {/* Arrow button bottom left */}
       <div className="px-5 pb-5">
         <div
-          className="w-12 h-12 rounded-full flex items-center justify-center transition-transform group-hover:scale-110"
-          style={{ background: "#0D1B6E", border: "2px solid rgba(255,255,255,0.15)" }}
+          className="w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110"
+          style={{ background: "#0D1B6E", border: "2px solid rgba(255,255,255,0.2)" }}
         >
-          <ArrowUpRight className="h-5 w-5 text-white" />
+          <ArrowUpRight className="h-4 w-4 text-white" />
         </div>
       </div>
+
+      {/* Bottom-left corner cutout effect */}
+      <div
+        className="absolute bottom-0 left-0 w-8 h-8"
+        style={{ background: "#E8F0FE", borderRadius: "0 0.5rem 0 0" }}
+      />
     </Link>
   );
 };
 
-/* ── Main Page ───────────────────────────────────────────────── */
 export default function Home() {
   const { user, signOut } = useAuth();
   const intro = useInView();
@@ -130,9 +140,9 @@ export default function Home() {
         <img src={heroBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(13,27,110,0.85) 0%, rgba(13,27,110,0.6) 100%)" }} />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-10 pb-8">
+        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-8">
           {/* Top bar */}
-          <div className="flex items-start justify-between mb-20">
+          <div className="flex items-start justify-between mb-16">
             <img
               src={logoClean}
               alt="KPMG Digital Factory"
