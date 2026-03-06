@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/lib/supabase";
 import { Lock } from "lucide-react";
@@ -10,11 +10,32 @@ export default function ResetPassword() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Supabase invia il token nell'hash dell'URL: #access_token=...&type=recovery
+    // Dobbiamo farlo processare a Supabase prima di poter aggiornare la password
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" && session) {
+        setSessionReady(true);
+        setError(null);
+      } else if (!session) {
+        setError("Link non valido o scaduto. Richiedi un nuovo link di reset.");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!sessionReady) {
+      setError("Sessione non pronta. Assicurati di aver cliccato il link dall'email.");
+      return;
+    }
     if (password !== confirm) {
       setError("Le password non coincidono.");
       return;
@@ -23,11 +44,14 @@ export default function ResetPassword() {
       setError("La password deve essere di almeno 8 caratteri.");
       return;
     }
+
     setIsPending(true);
     const { error } = await supabase.auth.updateUser({ password });
-    if (error) setError(error.message);
-    else {
+    if (error) {
+      setError(error.message);
+    } else {
       setMessage("✅ Password aggiornata! Verrai reindirizzato al login...");
+      await supabase.auth.signOut();
       setTimeout(() => navigate("/login"), 2500);
     }
     setIsPending(false);
@@ -46,13 +70,28 @@ export default function ResetPassword() {
         </div>
 
         <form onSubmit={handleSubmit} className="px-8 py-8 space-y-5">
+          {/* Stato sessione */}
+          {!sessionReady && !error && !message && (
+            <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm" style={{ background: "rgba(0,145,218,0.12)", border: "1px solid rgba(0,145,218,0.25)" }}>
+              <div className="w-4 h-4 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin shrink-0" />
+              <span className="text-blue-300">Verifica del link in corso...</span>
+            </div>
+          )}
+
+          {sessionReady && !message && (
+            <div className="px-4 py-3 rounded-xl text-sm" style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.25)" }}>
+              <span className="text-green-300">✅ Link verificato. Inserisci la nuova password.</span>
+            </div>
+          )}
+
           {error && (
-            <div className="flex items-start gap-3 px-4 py-3 rounded-xl text-sm" style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)" }}>
+            <div className="px-4 py-3 rounded-xl text-sm" style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)" }}>
               <span className="text-red-300 leading-snug">{error}</span>
             </div>
           )}
+
           {message && (
-            <div className="flex items-start gap-3 px-4 py-3 rounded-xl text-sm" style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.25)" }}>
+            <div className="px-4 py-3 rounded-xl text-sm" style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.25)" }}>
               <span className="text-green-300 leading-snug">{message}</span>
             </div>
           )}
@@ -83,8 +122,8 @@ export default function ResetPassword() {
             </div>
           </div>
 
-          <button type="submit" disabled={isPending}
-            className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60"
+          <button type="submit" disabled={isPending || !sessionReady}
+            className="w-full py-3 rounded-xl text-sm font-semibold text-white transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ background: "linear-gradient(135deg, #0091DA 0%, #0068A5 100%)", boxShadow: "0 4px 20px rgba(0,145,218,0.35)" }}>
             {isPending ? (<><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Aggiornamento…</>) : "Aggiorna password"}
           </button>
