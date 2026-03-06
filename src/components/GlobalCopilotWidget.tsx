@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Minus, X } from "lucide-react";
 import aiAssistantAvatar from "@/assets/kpmg_df_ai_assistant.png";
 
@@ -7,6 +8,9 @@ const COPILOT_IFRAME_URL = "https://copilotstudio.microsoft.com/environments/Def
 export const GlobalCopilotWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
+  const location = useLocation();
+
+  if (location.pathname === "/login") return null;
 
   return (
     <>
@@ -44,7 +48,7 @@ export const GlobalCopilotWidget = () => {
           </div>
           {!isMinimized && (
             <iframe src={COPILOT_IFRAME_URL} className="flex-1 w-full border-none"
-              title="KPMG DF AI Assistant" allow="microphone" />
+              title="KPMG Digital Factory AI Assistant" allow="microphone" />
           )}
         </div>
       )}
