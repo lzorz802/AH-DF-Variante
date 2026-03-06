@@ -133,7 +133,7 @@ export default function Home() {
         <div className="relative z-10 max-w-7xl mx-auto px-6 pt-4 pb-8">
           {/* Top bar */}
           <div className="flex items-start justify-between mb-6">
-            <img src={logoClean} alt="KPMG Digital Factory" className="h-32" />
+            <img src={logoClean} alt="KPMG Digital Factory" className="h-60" />
             {user && (
               <div className="flex items-center gap-3 mt-4">
                 <div className="flex items-center gap-2 text-xs text-white/70">
