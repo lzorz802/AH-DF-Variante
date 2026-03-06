@@ -9,8 +9,8 @@ import { motion } from "framer-motion";
 
 const cards = [
   {
-    title: "AI Performance Dashboard",
-    subtitle: "Analisi delle prestazioni AI",
+    title: "Reporting",
+    subtitle: "Report realizzati e pubblicati dalla Digital Factory",
     icon: Settings,
     link: "/reports",
   },
