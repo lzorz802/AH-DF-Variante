@@ -14,27 +14,26 @@ export default function ResetPassword() {
   const navigate = useNavigate();
 
   useEffect(() => {
-  const timer = setTimeout(() => {
-    if (!sessionReady) {
-      setError("Link non valido o scaduto. Richiedi un nuovo link di reset.");
-    }
-  }, 3000); // aspetta 3 secondi prima di mostrare errore
+    let timer: ReturnType<typeof setTimeout>;
 
-  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-    if (event === "PASSWORD_RECOVERY" && session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY" && session) {
+        clearTimeout(timer);
+        setSessionReady(true);
+        setError(null);
+      }
+    });
+
+    timer = setTimeout(() => {
+      if (!sessionReady) {
+        setError("Link non valido o scaduto. Richiedi un nuovo link di reset.");
+      }
+    }, 3000);
+
+    return () => {
       clearTimeout(timer);
-      setSessionReady(true);
-      setError(null);
-    }
-  });
-
-  return () => {
-    clearTimeout(timer);
-    subscription.unsubscribe();
-  };
-}, []);
-
-    return () => subscription.unsubscribe();
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleSubmit = async (e: FormEvent) => {
@@ -79,7 +78,6 @@ export default function ResetPassword() {
         </div>
 
         <form onSubmit={handleSubmit} className="px-8 py-8 space-y-5">
-          {/* Stato sessione */}
           {!sessionReady && !error && !message && (
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm" style={{ background: "rgba(0,145,218,0.12)", border: "1px solid rgba(0,145,218,0.25)" }}>
               <div className="w-4 h-4 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin shrink-0" />
