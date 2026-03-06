@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import ReportViewer from "./pages/ReportViewer";
 import BimDashboard from "./pages/BimDashboard";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -25,6 +26,7 @@ const App = () => (
           <GlobalCopilotWidget />
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/report/:id" element={<ProtectedRoute><ReportViewer /></ProtectedRoute>} />
