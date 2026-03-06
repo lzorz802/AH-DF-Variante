@@ -77,7 +77,7 @@ export const GlobalCopilotWidget = () => {
             <div className="flex items-center gap-1">
               {/* Minimize → goes back to floating circle */}
               <button
-                onClick={() => setIsCollapsed(true)}
+                onClick={() => { setIsOpen(false); setIsCollapsed(true); }}
                 className="p-1.5 rounded hover:bg-white/10 transition-colors text-white"
                 title="Riduci a icona"
               >
