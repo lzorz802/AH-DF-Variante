@@ -1,10 +1,12 @@
-import { ArrowUpRight, Settings, Database, Globe, LogOut, User, MessageCircle, X, Minus } from "lucide-react";
+import { ArrowUpRight, Settings, Database, Globe, LogOut, User, X, Minus, Building2, BarChart3, Layout, Bot, Zap, Repeat, Shield, Rocket, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import digitalFactoryLogo from "@/assets/digital_factory_logo.png";
+import logoClean from "@/assets/logo_digital_factory_clean.png";
 import heroBg from "@/assets/hero-bg.png";
 import dashboardPreview from "@/assets/dashboard-preview.png";
-import { useState } from "react";
+import aiAssistantAvatar from "@/assets/kpmg_df_ai_assistant.png";
+import { useState, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 
 const COPILOT_IFRAME_URL = "https://copilotstudio.microsoft.com/environments/Default-2b8dac2b-9179-468b-9bd8-1fbf8bd844c7/bots/auto_agent_fT_Ih/webchat?__version__=2";
 
@@ -29,6 +31,55 @@ const cards = [
   },
 ];
 
+const services = [
+  {
+    icon: Building2,
+    title: "Soluzioni digitali per la building experience",
+    description: "Ecosistemi integrati per la digitalizzazione degli edifici e dei servizi connessi.",
+  },
+  {
+    icon: BarChart3,
+    title: "AI-enhanced reporting",
+    description: "Reportistica avanzata integrata con agenti conversazionali per l'interrogazione in linguaggio naturale.",
+  },
+  {
+    icon: Layout,
+    title: "Gestione integrata dei canali digitali",
+    description: "Ottimizzazione dei touchpoint digitali e web app multiservizio come entry point unificato.",
+  },
+  {
+    icon: Bot,
+    title: "Agenti AI su misura",
+    description: "Agenti di intelligenza artificiale personalizzati a supporto dell'efficientamento organizzativo.",
+  },
+];
+
+const values = [
+  { icon: Zap, label: "Scalabilità" },
+  { icon: Repeat, label: "Riusabilità" },
+  { icon: Shield, label: "Governance" },
+  { icon: Rocket, label: "Velocità di delivery" },
+  { icon: Users, label: "Multi-stakeholder" },
+];
+
+/* ── Scroll animation hook ───────────────────────────────────── */
+function useInView(threshold = 0.15) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) { setVisible(true); obs.disconnect(); } },
+      { threshold }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+  return { ref, visible };
+}
+
+/* ── Copilot Widget ──────────────────────────────────────────── */
 const CopilotWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
@@ -38,44 +89,39 @@ const CopilotWidget = () => {
       {!isOpen && (
         <button
           onClick={() => { setIsOpen(true); setIsMinimized(false); }}
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3
-                     rounded-full shadow-lg hover:opacity-90 transition-all"
-          style={{ background: "#00AEEF", color: "#fff" }}
+          className="fixed bottom-6 right-6 z-50 w-16 h-16 rounded-full shadow-lg hover:scale-105 transition-transform overflow-hidden border-2"
+          style={{ borderColor: "#00AEEF" }}
           aria-label="Apri assistente virtuale"
         >
-          <MessageCircle className="h-5 w-5" />
-          <span className="text-sm font-semibold">Web App Agent</span>
+          <img src={aiAssistantAvatar} alt="AI Assistant" className="w-full h-full object-cover" />
         </button>
       )}
 
       {isOpen && (
         <div
-          className={`fixed bottom-6 right-6 z-50 w-[380px] rounded-2xl
-                      shadow-2xl border border-white/10 flex flex-col overflow-hidden
-                      transition-all duration-200
-                      ${isMinimized ? "h-[52px]" : "h-[600px]"}`}
-          style={{ background: "#0D1B6E" }}
+          className={`fixed bottom-6 right-6 z-50 w-[380px] rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${isMinimized ? "h-[56px]" : "h-[600px]"}`}
+          style={{ background: "#0D1B6E", border: "1px solid rgba(0,174,239,0.3)" }}
         >
-          <div className="flex items-center justify-between px-4 py-3 shrink-0"
-            style={{ background: "#00AEEF" }}>
-            <div className="flex items-center gap-2 text-white">
-              <MessageCircle className="h-4 w-4" />
-              <span className="text-sm font-semibold">Web App Agent</span>
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ background: "#0D1B6E" }}>
+            <div className="flex items-center gap-2.5">
+              <img src={aiAssistantAvatar} alt="" className="w-8 h-8 rounded-full" />
+              <span className="text-sm font-semibold text-white">KPMG DF AI Assistant</span>
             </div>
             <div className="flex items-center gap-1">
               <button onClick={() => setIsMinimized(!isMinimized)}
-                className="p-1 rounded hover:bg-white/20 transition-colors text-white">
+                className="p-1 rounded hover:bg-white/10 transition-colors text-white">
                 <Minus className="h-3.5 w-3.5" />
               </button>
               <button onClick={() => setIsOpen(false)}
-                className="p-1 rounded hover:bg-white/20 transition-colors text-white">
+                className="p-1 rounded hover:bg-white/10 transition-colors text-white">
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
           {!isMinimized && (
             <iframe src={COPILOT_IFRAME_URL} className="flex-1 w-full border-none"
-              title="Web App Agent" allow="microphone" />
+              title="KPMG DF AI Assistant" allow="microphone" />
           )}
         </div>
       )}
@@ -83,21 +129,86 @@ const CopilotWidget = () => {
   );
 };
 
+/* ── Card with notched corner ────────────────────────────────── */
+const HomeCard = ({ card }: { card: typeof cards[0] }) => {
+  const Icon = card.icon;
+  return (
+    <Link to={card.link} className="group block relative">
+      {/* Main card body */}
+      <div
+        className="rounded-2xl overflow-hidden transition-all duration-300 group-hover:-translate-y-1"
+        style={{ background: "#1A2B8C", boxShadow: "0 8px 32px rgba(13,27,110,0.4)" }}
+      >
+        {/* Preview image */}
+        <div className="p-4 pb-0">
+          <div className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+            <img src={dashboardPreview} alt={card.title}
+              className="w-full h-44 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity" />
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-5 pt-4 pb-16">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
+              style={{ background: "rgba(0,174,239,0.15)" }}>
+              <Icon className="h-4.5 w-4.5" style={{ color: "#00AEEF", filter: "drop-shadow(0 0 6px rgba(0,174,239,0.5))" }} />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white leading-snug">{card.title}</h3>
+              <p className="text-sm text-white/50 mt-1">{card.subtitle}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Notched corner + arrow button */}
+      <div className="absolute bottom-0 left-0">
+        {/* Light background "notch" shape */}
+        <div className="relative w-[72px] h-[72px]">
+          {/* Background color fill for the notch */}
+          <div className="absolute inset-0 rounded-tr-2xl" style={{ background: "#E8F0FE" }} />
+          {/* Curved mask top-right to blend with card */}
+          <div className="absolute top-0 right-0 w-4 h-4 -translate-y-full" style={{ background: "#1A2B8C" }}>
+            <div className="w-full h-full rounded-bl-2xl" style={{ background: "#E8F0FE" }} />
+          </div>
+          {/* Curved mask bottom-left */}
+          <div className="absolute bottom-0 right-0 translate-x-full w-4 h-4" style={{ background: "#1A2B8C" }}>
+            <div className="w-full h-full rounded-bl-2xl" style={{ background: "#E8F0FE" }} />
+          </div>
+          {/* Arrow button */}
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center transition-transform group-hover:scale-110"
+              style={{ background: "#0D1B6E", border: "2px solid rgba(255,255,255,0.15)" }}
+            >
+              <ArrowUpRight className="h-5 w-5 text-white" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+};
+
+/* ── Main Page ───────────────────────────────────────────────── */
 export default function Home() {
   const { user, signOut } = useAuth();
+  const intro = useInView();
+  const servicesSection = useInView();
+  const valuesSection = useInView();
 
   return (
     <div className="min-h-screen" style={{ background: "#E8F0FE" }}>
       {/* Hero */}
       <section className="relative overflow-hidden" style={{ minHeight: 420 }}>
         <img src={heroBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
-        {/* Overlay */}
         <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(13,27,110,0.85) 0%, rgba(13,27,110,0.6) 100%)" }} />
 
         <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
           {/* Top bar */}
           <div className="flex items-center justify-between mb-12">
-            <img src={digitalFactoryLogo} alt="KPMG Digital Factory" className="h-12 rounded-lg" />
+            <img src={logoClean} alt="KPMG Digital Factory" className="h-12 rounded-lg" />
             {user && (
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 text-xs text-white/70">
@@ -130,44 +241,78 @@ export default function Home() {
       <section className="max-w-7xl mx-auto px-6 -mt-8 pb-16 relative z-20">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {cards.map((card) => (
-            <Link
-              key={card.title}
-              to={card.link}
-              className="group rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1"
-              style={{
-                background: "#1A2B8C",
-                boxShadow: "0 8px 32px rgba(13,27,110,0.3)",
-              }}
+            <HomeCard key={card.title} card={card} />
+          ))}
+        </div>
+      </section>
+
+      {/* ── Digital Factory Description Section ──────────────── */}
+
+      {/* Intro */}
+      <section ref={intro.ref} className="py-20 px-6" style={{ background: "#0D1B6E" }}>
+        <motion.div
+          className="max-w-3xl mx-auto text-center"
+          initial={{ opacity: 0, y: 40 }}
+          animate={intro.visible ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.7 }}
+        >
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">
+            Cos'è la Digital Factory?
+          </h2>
+          <p className="text-lg text-white/75 leading-relaxed">
+            La Digital Factory è un centro di eccellenza KPMG che combina competenze su tecnologie digitali,
+            architetture dati, intelligenza artificiale e UX/UI design per creare soluzioni digitali scalabili.
+            Funziona come una fabbrica dell'innovazione, trasformando idee e bisogni concreti delle organizzazioni
+            in prodotti digitali ad alto impatto.
+          </p>
+        </motion.div>
+      </section>
+
+      {/* Services */}
+      <section ref={servicesSection.ref} className="py-20 px-6" style={{ background: "#E8F0FE" }}>
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-12" style={{ color: "#0D1B6E" }}>
+            I Quattro Servizi
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {services.map((svc, i) => (
+              <motion.div
+                key={svc.title}
+                className="rounded-2xl p-6 border"
+                style={{ background: "#fff", borderColor: "rgba(0,174,239,0.15)" }}
+                initial={{ opacity: 0, y: 30 }}
+                animate={servicesSection.visible ? { opacity: 1, y: 0 } : {}}
+                transition={{ duration: 0.5, delay: i * 0.12 }}
+              >
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
+                  style={{ background: "rgba(0,174,239,0.1)" }}>
+                  <svc.icon className="h-5 w-5" style={{ color: "#00AEEF" }} />
+                </div>
+                <h3 className="text-base font-bold mb-2" style={{ color: "#0D1B6E" }}>{svc.title}</h3>
+                <p className="text-sm leading-relaxed" style={{ color: "#4A5568" }}>{svc.description}</p>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Values strip */}
+      <section ref={valuesSection.ref} className="py-14 px-6" style={{ background: "#0D1B6E" }}>
+        <div className="max-w-5xl mx-auto flex flex-wrap justify-center gap-8">
+          {values.map((v, i) => (
+            <motion.div
+              key={v.label}
+              className="flex items-center gap-2.5"
+              initial={{ opacity: 0, x: -20 }}
+              animate={valuesSection.visible ? { opacity: 1, x: 0 } : {}}
+              transition={{ duration: 0.4, delay: i * 0.1 }}
             >
-              {/* Preview image */}
-              <div className="p-4 pb-0">
-                <div className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
-                  <img src={dashboardPreview} alt={card.title}
-                    className="w-full h-44 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity" />
-                </div>
+              <div className="w-9 h-9 rounded-lg flex items-center justify-center"
+                style={{ background: "rgba(0,174,239,0.15)" }}>
+                <v.icon className="h-4 w-4" style={{ color: "#00AEEF" }} />
               </div>
-
-              {/* Content */}
-              <div className="p-5 pt-4">
-                <div className="flex items-start gap-3 mb-1">
-                  <card.icon className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#00AEEF" }} />
-                  <div>
-                    <h3 className="text-base font-bold text-white leading-snug">{card.title}</h3>
-                    <p className="text-sm text-white/50 mt-1">{card.subtitle}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Arrow button */}
-              <div className="px-5 pb-5">
-                <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center transition-transform group-hover:scale-110"
-                  style={{ background: "#0D1B6E", border: "2px solid rgba(255,255,255,0.15)" }}
-                >
-                  <ArrowUpRight className="h-5 w-5 text-white" />
-                </div>
-              </div>
-            </Link>
+              <span className="text-sm font-medium text-white">{v.label}</span>
+            </motion.div>
           ))}
         </div>
       </section>
