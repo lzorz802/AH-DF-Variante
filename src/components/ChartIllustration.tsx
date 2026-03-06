@@ -1,7 +1,7 @@
 const LineChart = () => (
   <svg viewBox="0 0 280 120" fill="none" className="w-full h-full">
     {/* Bars */}
-    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => {
+    {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((i) => { 
       const heights = [45, 60, 50, 75, 55, 80, 65, 70, 58, 85, 62, 72];
       const x = 12 + i * 22;
       return (
