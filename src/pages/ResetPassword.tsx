@@ -14,16 +14,25 @@ export default function ResetPassword() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Supabase invia il token nell'hash dell'URL: #access_token=...&type=recovery
-    // Dobbiamo farlo processare a Supabase prima di poter aggiornare la password
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" && session) {
-        setSessionReady(true);
-        setError(null);
-      } else if (!session) {
-        setError("Link non valido o scaduto. Richiedi un nuovo link di reset.");
-      }
-    });
+  const timer = setTimeout(() => {
+    if (!sessionReady) {
+      setError("Link non valido o scaduto. Richiedi un nuovo link di reset.");
+    }
+  }, 3000); // aspetta 3 secondi prima di mostrare errore
+
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    if (event === "PASSWORD_RECOVERY" && session) {
+      clearTimeout(timer);
+      setSessionReady(true);
+      setError(null);
+    }
+  });
+
+  return () => {
+    clearTimeout(timer);
+    subscription.unsubscribe();
+  };
+}, []);
 
     return () => subscription.unsubscribe();
   }, []);
