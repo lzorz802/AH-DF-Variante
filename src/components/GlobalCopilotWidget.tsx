@@ -16,7 +16,14 @@ export const GlobalCopilotWidget = () => {
     <>
       {/* Floating button — visible when chat is closed OR collapsed */}
       {(!isOpen || isCollapsed) && (
-        <div className="fixed bottom-10 right-6 z-[9999]" style={{ width: "144px", height: "144px" }}>
+        <div
+          className="fixed bottom-10 right-6 z-[9999]"
+          style={{
+            width: isCollapsed ? "48px" : "144px",
+            height: isCollapsed ? "48px" : "144px",
+            transition: "width 0.3s ease, height 0.3s ease",
+          }}
+        >
           
           {/* Shrink button — top right corner of the bounding square */}
           {!isCollapsed && (
