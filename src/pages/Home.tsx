@@ -89,7 +89,7 @@ const CopilotWidget = () => {
       {!isOpen && (
         <button
           onClick={() => { setIsOpen(true); setIsMinimized(false); }}
-          className="fixed bottom-6 right-6 z-50 w-16 h-16 rounded-full shadow-lg hover:scale-105 transition-transform overflow-hidden border-2"
+          className="fixed bottom-6 right-6 z-50 w-20 h-20 rounded-full shadow-lg hover:scale-105 transition-transform overflow-hidden border-2"
           style={{ borderColor: "#00AEEF" }}
           aria-label="Apri assistente virtuale"
         >
