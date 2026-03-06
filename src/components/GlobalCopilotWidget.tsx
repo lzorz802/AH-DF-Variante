@@ -13,7 +13,7 @@ export const GlobalCopilotWidget = () => {
       {!isOpen && (
         <button
           onClick={() => { setIsOpen(true); setIsMinimized(false); }}
-          className="fixed bottom-6 right-6 z-50 w-28 h-28 rounded-full shadow-lg hover:scale-105 transition-transform overflow-hidden border-2"
+          className="fixed bottom-6 right-6 z-50 w-36 h-36 rounded-full shadow-lg hover:scale-105 transition-transform overflow-hidden border-2"
           style={{ borderColor: "#00AEEF" }}
           aria-label="Apri assistente virtuale"
         >
@@ -29,7 +29,7 @@ export const GlobalCopilotWidget = () => {
           <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ background: "#0D1B6E" }}>
             <div className="flex items-center gap-2.5">
               <img src={aiAssistantAvatar} alt="" className="w-10 h-10 rounded-full" />
-              <span className="text-sm font-semibold text-white">KPMG DF AI Assistant</span>
+              <span className="text-sm font-semibold text-white">KPMG Digital Factory AI Assistant</span>
             </div>
             <div className="flex items-center gap-1">
               <button onClick={() => setIsMinimized(!isMinimized)}
