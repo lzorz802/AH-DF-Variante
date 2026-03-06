@@ -79,11 +79,11 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
   return (
     <Link
       to={card.link}
-      className="group relative flex flex-col overflow-hidden transition-all duration-300 hover:-translate-y-1"
+      className="group flex flex-col overflow-hidden transition-all duration-300 hover:-translate-y-1"
       style={{
-        background: "linear-gradient(160deg, #1a3a8f 0%, #0d1b6e 60%, #0a1550 100%)",
-        boxShadow: "0 8px 32px rgba(13,27,110,0.4)",
-        borderRadius: "1rem 1rem 1rem 0",
+        background: "#1A2B8C",
+        boxShadow: "0 8px 32px rgba(13,27,110,0.3)",
+        borderRadius: "1rem",
       }}
     >
       {/* Preview image */}
@@ -92,7 +92,7 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
           <img
             src={dashboardPreview}
             alt={card.title}
-            className="w-full h-48 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity"
+            className="w-full h-64 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity"
           />
         </div>
       </div>
@@ -108,7 +108,7 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
         </div>
       </div>
 
-      {/* Arrow button bottom left */}
+      {/* Arrow button */}
       <div className="px-5 pb-5">
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110"
@@ -117,12 +117,6 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
           <ArrowUpRight className="h-4 w-4 text-white" />
         </div>
       </div>
-
-      {/* Bottom-left corner cutout effect */}
-      <div
-        className="absolute bottom-0 left-0 w-8 h-8"
-        style={{ background: "#E8F0FE", borderRadius: "0 0.5rem 0 0" }}
-      />
     </Link>
   );
 };
