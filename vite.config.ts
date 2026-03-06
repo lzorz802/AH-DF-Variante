@@ -20,9 +20,7 @@ export default defineConfig({
   },
   build: {
     rollupOptions: {
-      output: {
-        generatedCodeFor: undefined,
-      },
+      output: {},
     },
   },
   esbuild: {

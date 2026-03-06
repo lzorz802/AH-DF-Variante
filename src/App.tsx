@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import Home from "./pages/Home";
 import Index from "./pages/Index";
 import ReportViewer from "./pages/ReportViewer";
 import BimDashboard from "./pages/BimDashboard";
@@ -22,7 +23,8 @@ const App = () => (
         <AuthProvider>
           <Routes>
             <Route path="/login" element={<Login />} />
-            <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute><Index /></ProtectedRoute>} />
             <Route path="/report/:id" element={<ProtectedRoute><ReportViewer /></ProtectedRoute>} />
             <Route path="/bim-dashboard" element={<ProtectedRoute><BimDashboard /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
