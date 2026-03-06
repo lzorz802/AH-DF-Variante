@@ -21,7 +21,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        mangleExports: false,
+        generatedCodeFor: undefined,
       },
     },
   },
