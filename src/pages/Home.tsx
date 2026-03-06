@@ -89,7 +89,7 @@ const CopilotWidget = () => {
       {!isOpen && (
         <button
           onClick={() => { setIsOpen(true); setIsMinimized(false); }}
-          className="fixed bottom-6 right-6 z-50 w-16 h-16 rounded-full shadow-lg hover:scale-105 transition-transform overflow-hidden border-2"
+          className="fixed bottom-6 right-6 z-50 w-20 h-20 rounded-full shadow-lg hover:scale-105 transition-transform overflow-hidden border-2"
           style={{ borderColor: "#00AEEF" }}
           aria-label="Apri assistente virtuale"
         >
@@ -99,7 +99,7 @@ const CopilotWidget = () => {
 
       {isOpen && (
         <div
-          className={`fixed bottom-6 right-6 z-50 w-[380px] rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${isMinimized ? "h-[56px]" : "h-[600px]"}`}
+          className={`fixed bottom-6 right-6 z-50 w-[340px] rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${isMinimized ? "h-[56px]" : "h-[480px]"}`}
           style={{ background: "#0D1B6E", border: "1px solid rgba(0,174,239,0.3)" }}
         >
           {/* Header */}
@@ -129,62 +129,43 @@ const CopilotWidget = () => {
   );
 };
 
-/* ── Card with notched corner ────────────────────────────────── */
+/* ── Home Card ────────────────────────────────────────────────── */
 const HomeCard = ({ card }: { card: typeof cards[0] }) => {
-  const Icon = card.icon;
   return (
-    <Link to={card.link} className="group block relative">
-      {/* Main card body */}
-      <div
-        className="rounded-2xl overflow-hidden transition-all duration-300 group-hover:-translate-y-1"
-        style={{ background: "#1A2B8C", boxShadow: "0 8px 32px rgba(13,27,110,0.4)" }}
-      >
-        {/* Preview image */}
-        <div className="p-4 pb-0">
-          <div className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
-            <img src={dashboardPreview} alt={card.title}
-              className="w-full h-44 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity" />
-          </div>
+    <Link
+      to={card.link}
+      className="group rounded-2xl overflow-hidden transition-all duration-300 hover:-translate-y-1"
+      style={{
+        background: "#1A2B8C",
+        boxShadow: "0 8px 32px rgba(13,27,110,0.3)",
+      }}
+    >
+      {/* Preview image */}
+      <div className="p-4 pb-0">
+        <div className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+          <img src={dashboardPreview} alt={card.title}
+            className="w-full h-44 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity" />
         </div>
+      </div>
 
-        {/* Content */}
-        <div className="p-5 pt-4 pb-16">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-              style={{ background: "rgba(0,174,239,0.15)" }}>
-              <Icon className="h-4.5 w-4.5" style={{ color: "#00AEEF", filter: "drop-shadow(0 0 6px rgba(0,174,239,0.5))" }} />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white leading-snug">{card.title}</h3>
-              <p className="text-sm text-white/50 mt-1">{card.subtitle}</p>
-            </div>
+      {/* Content */}
+      <div className="p-5 pt-4">
+        <div className="flex items-start gap-3 mb-1">
+          <card.icon className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#00AEEF" }} />
+          <div>
+            <h3 className="text-base font-bold text-white leading-snug">{card.title}</h3>
+            <p className="text-sm text-white/50 mt-1">{card.subtitle}</p>
           </div>
         </div>
       </div>
 
-      {/* Notched corner + arrow button */}
-      <div className="absolute bottom-0 left-0">
-        {/* Light background "notch" shape */}
-        <div className="relative w-[72px] h-[72px]">
-          {/* Background color fill for the notch */}
-          <div className="absolute inset-0 rounded-tr-2xl" style={{ background: "#E8F0FE" }} />
-          {/* Curved mask top-right to blend with card */}
-          <div className="absolute top-0 right-0 w-4 h-4 -translate-y-full" style={{ background: "#1A2B8C" }}>
-            <div className="w-full h-full rounded-bl-2xl" style={{ background: "#E8F0FE" }} />
-          </div>
-          {/* Curved mask bottom-left */}
-          <div className="absolute bottom-0 right-0 translate-x-full w-4 h-4" style={{ background: "#1A2B8C" }}>
-            <div className="w-full h-full rounded-bl-2xl" style={{ background: "#E8F0FE" }} />
-          </div>
-          {/* Arrow button */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div
-              className="w-12 h-12 rounded-full flex items-center justify-center transition-transform group-hover:scale-110"
-              style={{ background: "#0D1B6E", border: "2px solid rgba(255,255,255,0.15)" }}
-            >
-              <ArrowUpRight className="h-5 w-5 text-white" />
-            </div>
-          </div>
+      {/* Arrow button */}
+      <div className="px-5 pb-5">
+        <div
+          className="w-12 h-12 rounded-full flex items-center justify-center transition-transform group-hover:scale-110"
+          style={{ background: "#0D1B6E", border: "2px solid rgba(255,255,255,0.15)" }}
+        >
+          <ArrowUpRight className="h-5 w-5 text-white" />
         </div>
       </div>
     </Link>
@@ -208,7 +189,7 @@ export default function Home() {
         <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
           {/* Top bar */}
           <div className="flex items-center justify-between mb-12">
-            <img src={logoClean} alt="KPMG Digital Factory" className="h-12 rounded-lg" />
+            <img src={logoClean} alt="KPMG Digital Factory" className="h-16" />
             {user && (
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 text-xs text-white/70">
