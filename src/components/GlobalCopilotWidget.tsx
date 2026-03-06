@@ -17,7 +17,7 @@ export const GlobalCopilotWidget = () => {
       {!isOpen && (
         <button
           onClick={() => { setIsOpen(true); setIsMinimized(false); }}
-          className="fixed bottom-6 right-6 z-50 w-36 h-36 rounded-full shadow-lg hover:scale-105 transition-transform overflow-hidden border-2"
+          className="fixed bottom-10 right-6 z-50 w-36 h-36 rounded-full shadow-lg hover:scale-105 transition-transform overflow-hidden border-2"
           style={{ borderColor: "#00AEEF" }}
           aria-label="Apri assistente virtuale"
         >
@@ -27,7 +27,7 @@ export const GlobalCopilotWidget = () => {
 
       {isOpen && (
         <div
-          className={`fixed bottom-6 right-6 z-50 w-[340px] rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${isMinimized ? "h-[56px]" : "h-[480px]"}`}
+          className={`fixed bottom-10 right-6 z-50 w-[340px] rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-200 ${isMinimized ? "h-[56px]" : "h-[480px]"}`}
           style={{ background: "#0D1B6E", border: "1px solid rgba(0,174,239,0.3)" }}
         >
           <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ background: "#0D1B6E" }}>
