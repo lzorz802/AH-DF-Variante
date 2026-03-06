@@ -10,7 +10,7 @@ export const GlobalCopilotWidget = () => {
   const [isMinimized, setIsMinimized] = useState(false);
   const location = useLocation();
 
-  if (location.pathname === "/login") return null;
+  if (location.pathname === "/login" || location.pathname === "/reset-password") return null;
 
   return (
     <>
