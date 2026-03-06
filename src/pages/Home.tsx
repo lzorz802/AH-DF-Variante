@@ -87,7 +87,6 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
         boxShadow: "0 8px 32px rgba(13,27,110,0.3)",
       }}
     >
-      {/* Preview image */}
       <div className="p-4 pb-0">
         <div className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
           <img src={dashboardPreview} alt={card.title}
@@ -95,7 +94,6 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
         </div>
       </div>
 
-      {/* Content */}
       <div className="p-5 pt-4">
         <div className="flex items-start gap-3 mb-1">
           <card.icon className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#00AEEF" }} />
@@ -106,7 +104,6 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
         </div>
       </div>
 
-      {/* Arrow button */}
       <div className="px-5 pb-5">
         <div
           className="w-12 h-12 rounded-full flex items-center justify-center transition-transform group-hover:scale-110"
@@ -133,12 +130,12 @@ export default function Home() {
         <img src={heroBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(13,27,110,0.85) 0%, rgba(13,27,110,0.6) 100%)" }} />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
+        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-4 pb-8">
           {/* Top bar */}
-          <div className="flex items-center justify-between mb-4">
-            <img src={logoClean} alt="KPMG Digital Factory" className="h-60" />
+          <div className="flex items-start justify-between mb-6">
+            <img src={logoClean} alt="KPMG Digital Factory" className="h-32" />
             {user && (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 mt-4">
                 <div className="flex items-center gap-2 text-xs text-white/70">
                   <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
                     <User className="h-3.5 w-3.5 text-white" />
@@ -173,8 +170,6 @@ export default function Home() {
           ))}
         </div>
       </section>
-
-      {/* ── Digital Factory Description Section ──────────────── */}
 
       {/* Intro */}
       <section ref={intro.ref} className="py-20 px-6" style={{ background: "#0D1B6E" }}>
