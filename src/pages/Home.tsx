@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import logoClean from "@/assets/logo_digital_factory_clean.png";
 import heroBg from "@/assets/hero-bg.png";
-import dashboardPreview from "@/assets/dashboard-preview.png";
+import dashboardPreview from "@/assets/dashboard-preview-2.png";
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 
