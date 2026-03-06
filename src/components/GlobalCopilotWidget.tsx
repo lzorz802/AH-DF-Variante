@@ -32,7 +32,13 @@ export const GlobalCopilotWidget = () => {
 
           {/* Avatar circle */}
           <button
-            onClick={() => { setIsOpen(true); setIsCollapsed(false); }}
+            onClick={() => {
+              if (isCollapsed) {
+                setIsCollapsed(false); // primo click → torna al cerchio grande
+              } else {
+                setIsOpen(true);       // secondo click → apre la chat
+              }
+            }}
             className="rounded-full shadow-lg hover:scale-105 overflow-hidden border-2 absolute"
             style={{
               borderColor: "#00AEEF",
