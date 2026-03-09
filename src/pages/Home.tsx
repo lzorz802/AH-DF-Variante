@@ -18,13 +18,13 @@ const cards = [
     title: "Soluzioni digitali innovative per la building experience",
     subtitle: "Strumenti digitali integrati per trasformare la gestione e la fruizione degli spazi.",
     icon: Database,
-    link: "/external?url=https://regionevenetobimsmartplatform.franchetti.tech/",
+    link: "https://regionevenetobimsmartplatform.franchetti.tech/",
   },
   {
     title: "Gestione integrata dei canali digitali",
     subtitle: "Monitora e ottimizza tutti i touchpoint digitali da un'unica piattaforma centralizzata.",
     icon: Globe,
-    link: "/external?url=https://regionevenetobimsmartplatform.franchetti.tech/",
+    link: "https://regionevenetobimsmartplatform.franchetti.tech/",
   },
 ];
 
@@ -76,6 +76,49 @@ function useInView(threshold = 0.15) {
 }
 
 const HomeCard = ({ card }: { card: typeof cards[0] }) => {
+  const isExternal = card.link.startsWith("http");
+
+  if (isExternal) {
+    return (
+      <div
+        onClick={() => window.open(card.link, "_blank", "noopener,noreferrer")}
+        className="group flex flex-col overflow-hidden transition-all duration-300 hover:-translate-y-1 cursor-pointer"
+        style={{
+          background: "#1A2B8C",
+          boxShadow: "0 8px 32px rgba(13,27,110,0.3)",
+          borderRadius: "1rem",
+        }}
+      >
+        <div className="p-4 pb-0">
+          <div className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+            <img
+              src={dashboardPreview}
+              alt={card.title}
+              className="w-full h-64 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity"
+            />
+          </div>
+        </div>
+        <div className="p-5 pt-4 flex-1">
+          <div className="flex items-start gap-3">
+            <card.icon className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#00AEEF" }} />
+            <div>
+              <h3 className="text-base font-bold text-white leading-snug">{card.title}</h3>
+              <p className="text-sm text-white/50 mt-1">{card.subtitle}</p>
+            </div>
+          </div>
+        </div>
+        <div className="px-5 pb-5 flex justify-start">
+          <div
+            className="w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+          >
+            <ArrowUpRight className="h-5 w-5 text-white" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Link
       to={card.link}
@@ -86,7 +129,6 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
         borderRadius: "1rem",
       }}
     >
-      {/* Preview image */}
       <div className="p-4 pb-0">
         <div className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
           <img
@@ -96,8 +138,6 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
           />
         </div>
       </div>
-
-      {/* Content */}
       <div className="p-5 pt-4 flex-1">
         <div className="flex items-start gap-3">
           <card.icon className="h-5 w-5 shrink-0 mt-0.5" style={{ color: "#00AEEF" }} />
@@ -107,8 +147,6 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
           </div>
         </div>
       </div>
-
-      {/* Arrow button — bottom left */}
       <div className="px-5 pb-5 flex justify-start">
         <div
           className="w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110"
@@ -136,7 +174,6 @@ export default function Home() {
 
         <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-8">
           {/* Top bar */}
-          {/* Top bar — logo left, user info pinned to page top-right */}
           <div className="flex items-start justify-between mb-16">
             <img
               src={logoClean}
