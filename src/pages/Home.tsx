@@ -108,13 +108,13 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
         </div>
       </div>
 
-      {/* Arrow button */}
-      <div className="px-5 pb-5">
+      {/* Arrow button — bottom left */}
+      <div className="px-5 pb-5 flex justify-start">
         <div
-          className="w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110"
-          style={{ background: "#0D1B6E", border: "2px solid rgba(255,255,255,0.2)" }}
+          className="w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110"
+          style={{ background: "rgba(255,255,255,0.15)" }}
         >
-          <ArrowUpRight className="h-4 w-4 text-white" />
+          <ArrowUpRight className="h-5 w-5 text-white" />
         </div>
       </div>
     </Link>
