@@ -137,7 +137,7 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
       <div className="p-4 pb-0">
         <div className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
           <img
-            src={dashboardPreview}
+            src={card.image}
             alt={card.title}
             className="w-full h-64 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity"
           />
