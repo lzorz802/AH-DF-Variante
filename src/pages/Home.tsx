@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import logoClean from "@/assets/logo_digital_factory_clean.png";
 import heroBg from "@/assets/hero-bg.png";
-import dashboardPreview from "@/assets/dashboard-preview-2.png";
+import cardAiReporting from "@/assets/card-ai-reporting.png";
+import cardBuildingExperience from "@/assets/card-building-experience.png";
+import cardGestioneCanali from "@/assets/card-gestione-canali.png";
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 
