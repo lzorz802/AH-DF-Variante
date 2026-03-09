@@ -136,28 +136,30 @@ export default function Home() {
 
         <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-8">
           {/* Top bar */}
+          {/* Top bar — logo left, user info pinned to page top-right */}
           <div className="flex items-start justify-between mb-16">
             <img
               src={logoClean}
               alt="KPMG Digital Factory"
               style={{ width: "300px", height: "auto", transform: "scale(1.5)", transformOrigin: "left center" }}
             />
-            {user && (
-              <div className="flex items-center gap-3 mt-4">
-                <div className="flex items-center gap-2 text-xs text-white/70">
-                  <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
-                    <User className="h-3.5 w-3.5 text-white" />
-                  </div>
-                  <span className="hidden sm:block max-w-[160px] truncate">{user.email}</span>
-                </div>
-                <button onClick={signOut} title="Esci"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">
-                  <LogOut className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Esci</span>
-                </button>
-              </div>
-            )}
           </div>
+          {/* User info — fixed top right */}
+          {user && (
+            <div className="absolute top-6 right-6 flex items-center gap-3">
+              <div className="flex items-center gap-2 text-xs text-white/70">
+                <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
+                  <User className="h-3.5 w-3.5 text-white" />
+                </div>
+                <span className="hidden sm:block max-w-[160px] truncate">{user.email}</span>
+              </div>
+              <button onClick={signOut} title="Esci"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">
+                <LogOut className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Esci</span>
+              </button>
+            </div>
+          )}
 
           {/* Hero text */}
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-5xl whitespace-nowrap">
