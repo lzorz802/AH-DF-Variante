@@ -9,22 +9,22 @@ import { motion } from "framer-motion";
 
 const cards = [
   {
-    title: "Reporting",
-    subtitle: "Report realizzati e pubblicati dalla Digital Factory",
+    title: "AI-enhanced reporting",
+    subtitle: "Report intelligenti arricchiti dall'AI, con insight in tempo reale per decisioni più rapide.",
     icon: Settings,
     link: "/reports",
   },
   {
-    title: "Data Architecture Overview",
-    subtitle: "Panoramica su Dati e Architettura",
+    title: "Soluzioni digitali innovative per la building experience",
+    subtitle: "Strumenti digitali integrati per trasformare la gestione e la fruizione degli spazi.",
     icon: Database,
-    link: "#",
+    link: "/external?url=https://regionevenetobimsmartplatform.franchetti.tech/",
   },
   {
-    title: "Digital Products Analytics",
-    subtitle: "Insights su prodotti digitali",
+    title: "Gestione integrata dei canali digitali",
+    subtitle: "Monitora e ottimizza tutti i touchpoint digitali da un'unica piattaforma centralizzata.",
     icon: Globe,
-    link: "#",
+    link: "/external?url=https://regionevenetobimsmartplatform.franchetti.tech/",
   },
 ];
 
