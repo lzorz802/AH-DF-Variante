@@ -3,7 +3,9 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import logoClean from "@/assets/logo_digital_factory_clean.png";
 import heroBg from "@/assets/hero-bg.png";
-import dashboardPreview from "@/assets/dashboard-preview-2.png";
+import cardAiReporting from "@/assets/card-ai-reporting.png";
+import cardBuildingExperience from "@/assets/card-building-experience.png";
+import cardGestioneCanali from "@/assets/card-gestione-canali.png";
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 
@@ -13,18 +15,21 @@ const cards = [
     subtitle: "Report intelligenti arricchiti dall'AI, con insight in tempo reale per decisioni più rapide.",
     icon: Settings,
     link: "/reports",
+    image: cardAiReporting,
   },
   {
     title: "Soluzioni digitali innovative per la building experience",
     subtitle: "Strumenti digitali integrati per trasformare la gestione e la fruizione degli spazi.",
     icon: Database,
     link: "https://regionevenetobimsmartplatform.franchetti.tech/",
+    image: cardBuildingExperience,
   },
   {
     title: "Gestione integrata dei canali digitali",
     subtitle: "Monitora e ottimizza tutti i touchpoint digitali da un'unica piattaforma centralizzata.",
     icon: Globe,
     link: "https://regionevenetobimsmartplatform.franchetti.tech/",
+    image: cardGestioneCanali,
   },
 ];
 
@@ -92,7 +97,7 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
         <div className="p-4 pb-0">
           <div className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
             <img
-              src={dashboardPreview}
+              src={card.image}
               alt={card.title}
               className="w-full h-64 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity"
             />
@@ -132,7 +137,7 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
       <div className="p-4 pb-0">
         <div className="rounded-xl overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
           <img
-            src={dashboardPreview}
+            src={card.image}
             alt={card.title}
             className="w-full h-64 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity"
           />
