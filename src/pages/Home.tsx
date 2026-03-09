@@ -108,13 +108,13 @@ const HomeCard = ({ card }: { card: typeof cards[0] }) => {
         </div>
       </div>
 
-      {/* Arrow button */}
-      <div className="px-5 pb-5">
+      {/* Arrow button — bottom left */}
+      <div className="px-5 pb-5 flex justify-start">
         <div
-          className="w-10 h-10 rounded-full flex items-center justify-center transition-transform group-hover:scale-110"
-          style={{ background: "#0D1B6E", border: "2px solid rgba(255,255,255,0.2)" }}
+          className="w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110"
+          style={{ background: "rgba(255,255,255,0.15)" }}
         >
-          <ArrowUpRight className="h-4 w-4 text-white" />
+          <ArrowUpRight className="h-5 w-5 text-white" />
         </div>
       </div>
     </Link>
@@ -136,28 +136,30 @@ export default function Home() {
 
         <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-8">
           {/* Top bar */}
+          {/* Top bar — logo left, user info pinned to page top-right */}
           <div className="flex items-start justify-between mb-16">
             <img
               src={logoClean}
               alt="KPMG Digital Factory"
               style={{ width: "300px", height: "auto", transform: "scale(1.5)", transformOrigin: "left center" }}
             />
-            {user && (
-              <div className="flex items-center gap-3 mt-4">
-                <div className="flex items-center gap-2 text-xs text-white/70">
-                  <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
-                    <User className="h-3.5 w-3.5 text-white" />
-                  </div>
-                  <span className="hidden sm:block max-w-[160px] truncate">{user.email}</span>
-                </div>
-                <button onClick={signOut} title="Esci"
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">
-                  <LogOut className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Esci</span>
-                </button>
-              </div>
-            )}
           </div>
+          {/* User info — fixed top right */}
+          {user && (
+            <div className="absolute top-6 right-6 flex items-center gap-3">
+              <div className="flex items-center gap-2 text-xs text-white/70">
+                <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
+                  <User className="h-3.5 w-3.5 text-white" />
+                </div>
+                <span className="hidden sm:block max-w-[160px] truncate">{user.email}</span>
+              </div>
+              <button onClick={signOut} title="Esci"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">
+                <LogOut className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Esci</span>
+              </button>
+            </div>
+          )}
 
           {/* Hero text */}
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-5xl whitespace-nowrap">
