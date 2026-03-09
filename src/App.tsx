@@ -14,6 +14,7 @@ import BimDashboard from "./pages/BimDashboard";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
+import ExternalViewer from "./pages/ExternalViewer";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +43,7 @@ const App = () => (
             <Route path="/report/:id" element={<ProtectedRoute><ReportViewer /></ProtectedRoute>} />
             <Route path="/bim-dashboard" element={<ProtectedRoute><BimDashboard /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
+            <Route path="/external" element={<ProtectedRoute><ExternalViewer /></ProtectedRoute>} />
           </Routes>
         </AuthProvider>
       </BrowserRouter>
