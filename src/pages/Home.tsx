@@ -15,18 +15,21 @@ const cards = [
     subtitle: "Report intelligenti arricchiti dall'AI, con insight in tempo reale per decisioni più rapide.",
     icon: Settings,
     link: "/reports",
+    image: cardAiReporting,
   },
   {
     title: "Soluzioni digitali innovative per la building experience",
     subtitle: "Strumenti digitali integrati per trasformare la gestione e la fruizione degli spazi.",
     icon: Database,
     link: "https://regionevenetobimsmartplatform.franchetti.tech/",
+    image: cardBuildingExperience,
   },
   {
     title: "Gestione integrata dei canali digitali",
     subtitle: "Monitora e ottimizza tutti i touchpoint digitali da un'unica piattaforma centralizzata.",
     icon: Globe,
     link: "https://regionevenetobimsmartplatform.franchetti.tech/",
+    image: cardGestioneCanali,
   },
 ];
 
