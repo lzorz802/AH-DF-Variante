@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import FilterTabsBar from "@/components/FilterTabsBar";
 import ReportCard from "@/components/ReportCard";
