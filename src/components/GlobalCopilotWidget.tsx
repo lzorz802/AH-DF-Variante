@@ -6,6 +6,9 @@ import aiAssistantAvatar from "@/assets/kpmg_df_ai_assistant.png";
 const N8N_WEBHOOK_URL =
   "https://gsprst.app.n8n.cloud/webhook/cf1de04f-3e38-426c-89f0-3bdb110a5dcf/chat";
 
+// Genera un sessionId unico per questa sessione browser
+const SESSION_ID = "session-" + Math.random().toString(36).slice(2) + Date.now();
+
 interface Message {
   role: "user" | "assistant";
   text: string;
@@ -54,7 +57,7 @@ export const GlobalCopilotWidget = () => {
       const res = await fetch(N8N_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatInput: text }),
+        body: JSON.stringify({ chatInput: text, sessionId: SESSION_ID }),
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
