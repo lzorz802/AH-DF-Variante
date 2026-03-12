@@ -1,4 +1,4 @@
-import { ArrowUpRight, Settings, Database, Globe, LogOut, User, Building2, BarChart3, Layout, Bot, Zap, Repeat, Shield, Rocket, Users } from "lucide-react";
+import { ArrowUpRight, Settings, Database, Globe, LogOut, User, Building2, BarChart3, Layout, Bot, Zap, Repeat, Shield, Rocket, Users, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import logoClean from "@/assets/logo_digital_factory_clean.png";
@@ -8,7 +8,6 @@ import cardBuildingExperience from "@/assets/card-building-experience.png";
 import cardGestioneCanali from "@/assets/card-gestione-canali.png";
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from "@/components/ui/carousel";
 
 const cards = [
   {
@@ -171,6 +170,17 @@ export default function Home() {
   const servicesSection = useInView();
   const valuesSection = useInView();
 
+  // Custom carousel state (we'll show left / center / right, center is larger)
+  const [activeService, setActiveService] = useState(0);
+  const nServices = services.length;
+
+  const prevService = () => setActiveService((s) => (s - 1 + nServices) % nServices);
+  const nextService = () => setActiveService((s) => (s + 1) % nServices);
+
+  const getIdx = (offset: number) => {
+    return (activeService + offset + nServices) % nServices;
+  };
+
   return (
     <div className="min-h-screen" style={{ background: "#E8F0FE" }}>
       {/* Hero */}
@@ -180,7 +190,7 @@ export default function Home() {
 
         <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-8 flex flex-col items-center text-center">
           {/* Top bar */}
-          <div className="flex items-start justify-between mb-16">
+          <div className="flex items-start justify-between mb-16 w-full">
             <img
               src={logoClean}
               alt="KPMG Digital Factory"
@@ -204,11 +214,12 @@ export default function Home() {
             </div>
           )}
 
-          {/* Hero text */}
-         <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-3xl">
-          Soluzioni digitali concrete ed innovative per la Customer e la User Experience
-         </h1>
-          
+          {/* Hero text - forced to two lines using explicit <br /> */}
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-3xl">
+            Soluzioni digitali concrete ed innovative
+            <br />
+            per la Customer e la User Experience
+          </h1>
         </div>
       </section>
 
@@ -250,43 +261,104 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* Services */}
+      {/* Services: custom carousel where center image is larger */}
       <section ref={servicesSection.ref} className="py-20 px-6" style={{ background: "#E8F0FE" }}>
         <div className="max-w-5xl mx-auto">
-          <h2 className="text-2xl md:text-3xl font-bold text-center mb-12" style={{ color: "#0D1B6E" }}>
+          <h2 className="text-2xl md:text-3xl font-bold text-center mb-8" style={{ color: "#0D1B6E" }}>
             I Quattro Servizi
           </h2>
-          <Carousel className="w-full" opts={{ align: "start", loop: true }}>
-            <CarouselContent>
-              {services.map((svc, i) => (
-                <CarouselItem key={svc.title} className="md:basis-1/2 lg:basis-1/3">
-                  <motion.div
-                    className="rounded-2xl overflow-hidden border h-full"
-                    style={{ background: "#fff", borderColor: "rgba(0,174,239,0.15)" }}
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={servicesSection.visible ? { opacity: 1, y: 0 } : {}}
-                    transition={{ duration: 0.5, delay: i * 0.12 }}
-                  >
-                    <div className="w-full h-40 overflow-hidden">
-                      <img
-                        src={cardAiReporting}
-                        alt={svc.title}
-                        className="w-full h-full object-cover object-top"
-                      />
-                    </div>
-                    <div className="p-6">
-                      <h3 className="text-base font-bold mb-2" style={{ color: "#0D1B6E" }}>{svc.title}</h3>
-                      <p className="text-sm leading-relaxed" style={{ color: "#4A5568" }}>{svc.description}</p>
-                    </div>
-                  </motion.div>
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-            <div className="flex justify-center gap-4 mt-8">
-              <CarouselPrevious className="static translate-y-0" />
-              <CarouselNext className="static translate-y-0" />
+
+          <div className="relative flex flex-col items-center">
+            {/* Carousel viewport */}
+            <div className="w-full flex items-center justify-center gap-6 md:gap-10">
+              {/* Left (small) */}
+              <motion.div
+                className="hidden md:block rounded-2xl overflow-hidden border flex-shrink-0 shadow-sm"
+                initial={{ opacity: 0.6, scale: 0.9 }}
+                animate={servicesSection.visible ? { opacity: 1, scale: 0.95 } : {}}
+                transition={{ duration: 0.4 }}
+                style={{ background: "#fff", borderColor: "rgba(0,174,239,0.08)", width: 160, height: 120 }}
+              >
+                <img
+                  src={cardAiReporting}
+                  alt={services[getIdx(-1)].title}
+                  className="w-full h-full object-cover object-top"
+                />
+              </motion.div>
+
+              {/* Center (large) */}
+              <motion.div
+                className="rounded-2xl overflow-hidden border shadow-lg flex-shrink-0"
+                initial={{ opacity: 0, y: 20 }}
+                animate={servicesSection.visible ? { opacity: 1, y: 0 } : {}}
+                transition={{ duration: 0.5 }}
+                style={{ background: "#fff", borderColor: "rgba(0,174,239,0.15)", width: 460, height: 260 }}
+              >
+                <img
+                  src={cardAiReporting}
+                  alt={services[getIdx(0)].title}
+                  className="w-full h-full object-cover object-top"
+                />
+              </motion.div>
+
+              {/* Right (small) */}
+              <motion.div
+                className="hidden md:block rounded-2xl overflow-hidden border flex-shrink-0 shadow-sm"
+                initial={{ opacity: 0.6, scale: 0.9 }}
+                animate={servicesSection.visible ? { opacity: 1, scale: 0.95 } : {}}
+                transition={{ duration: 0.4 }}
+                style={{ background: "#fff", borderColor: "rgba(0,174,239,0.08)", width: 160, height: 120 }}
+              >
+                <img
+                  src={cardAiReporting}
+                  alt={services[getIdx(1)].title}
+                  className="w-full h-full object-cover object-top"
+                />
+              </motion.div>
             </div>
-          </Carousel>
+
+            {/* Under the images, title + description of center service */}
+            <div className="mt-6 text-center max-w-2xl">
+              <h3 className="text-lg md:text-xl font-bold" style={{ color: "#0D1B6E" }}>
+                {services[getIdx(0)].title}
+              </h3>
+              <p className="text-sm mt-2" style={{ color: "#4A5568" }}>
+                {services[getIdx(0)].description}
+              </p>
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center gap-6 mt-8">
+              <button
+                onClick={prevService}
+                aria-label="Precedente"
+                className="w-12 h-12 rounded-full flex items-center justify-center border hover:shadow-md transition"
+                style={{ borderColor: "rgba(13,27,110,0.08)", background: "white" }}
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <div className="flex gap-2 items-center">
+                {/* small indicators */}
+                {services.map((_, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActiveService(idx)}
+                    aria-label={`Vai al servizio ${idx + 1}`}
+                    className={`w-2 h-2 rounded-full transition-all ${idx === activeService ? "scale-110" : "opacity-50"}`}
+                    style={{ background: idx === activeService ? "#0D1B6E" : "#A0AEC0" }}
+                  />
+                ))}
+              </div>
+              <button
+                onClick={nextService}
+                aria-label="Successivo"
+                className="w-12 h-12 rounded-full flex items-center justify-center border hover:shadow-md transition"
+                style={{ borderColor: "rgba(13,27,110,0.08)", background: "white" }}
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
