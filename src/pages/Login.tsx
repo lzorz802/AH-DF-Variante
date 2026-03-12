@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Eye, EyeOff, Lock, Mail, AlertCircle } from "lucide-react";
-import kpmgLogo from "@/assets/digital_factory_logo.png";
+import kpmgLogo from "@/assets/logo_digital_factory_clean.png";
 
 export default function Login() {
   const { user, isLoading, signIn, resetPassword } = useAuth();
@@ -48,8 +48,6 @@ export default function Login() {
       <div className="relative w-full max-w-md rounded-2xl overflow-hidden" style={{ background: "rgba(255,255,255,0.04)", backdropFilter: "blur(24px)", border: "1px solid rgba(255,255,255,0.10)", boxShadow: "0 32px 80px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)" }}>
         <div className="px-8 pt-10 pb-8 text-center" style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
           <img src={kpmgLogo} alt="KPMG Digital Factory" className="w-full max-w-[260px] mx-auto mb-6 rounded-lg" />
-          <h1 className="text-2xl font-semibold text-white tracking-tight">Analytics Portal</h1>
-          <p className="text-sm text-white/45 mt-1.5">Accedi con le tue credenziali @kpmg.it</p>
         </div>
 
         <form onSubmit={handleSubmit} className="px-8 py-8 space-y-5">
@@ -67,7 +65,7 @@ export default function Login() {
           )}
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-white/50 uppercase tracking-widest">Email aziendale</label>
+            <label className="block text-xs font-medium text-white uppercase tracking-widest">Email aziendale</label>
             <div className="relative">
               <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
               <input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nome.cognome@kpmg.it"
@@ -80,7 +78,7 @@ export default function Login() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-white/50 uppercase tracking-widest">Password</label>
+            <label className="block text-xs font-medium text-white uppercase tracking-widest">Password</label>
             <div className="relative">
               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30 pointer-events-none" />
               <input type={showPassword ? "text" : "password"} autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••"
