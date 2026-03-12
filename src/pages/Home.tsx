@@ -8,6 +8,7 @@ import cardBuildingExperience from "@/assets/card-building-experience.png";
 import cardGestioneCanali from "@/assets/card-gestione-canali.png";
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
+import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from "@/components/ui/carousel";
 
 const cards = [
   {
@@ -177,13 +178,13 @@ export default function Home() {
         <img src={heroBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(13,27,110,0.85) 0%, rgba(13,27,110,0.6) 100%)" }} />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-8">
+        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-8 flex flex-col items-center text-center">
           {/* Top bar */}
           <div className="flex items-start justify-between mb-16">
             <img
               src={logoClean}
               alt="KPMG Digital Factory"
-              style={{ width: "300px", height: "auto", transform: "scale(1.5)", transformOrigin: "left center" }}
+              style={{ width: "300px", height: "auto", transform: "scale(1.5)", transformOrigin: "center" }}
             />
           </div>
           {/* User info — fixed top right */}
@@ -204,7 +205,7 @@ export default function Home() {
           )}
 
           {/* Hero text */}
-         <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-5xl">
+         <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-3xl">
           Soluzioni digitali concrete ed innovative per la Customer e la User Experience
          </h1>
           
@@ -221,9 +222,18 @@ export default function Home() {
       </section>
 
       {/* Intro */}
-      <section ref={intro.ref} className="py-20 px-6" style={{ background: "#0D1B6E" }}>
+      <section
+        ref={intro.ref}
+        className="py-20 px-6 relative overflow-hidden"
+        style={{
+          backgroundImage: `url(${heroBg})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
+        <div className="absolute inset-0" style={{ background: "rgba(13,27,110,0.75)" }} />
         <motion.div
-          className="max-w-3xl mx-auto text-center"
+          className="relative z-10 max-w-3xl mx-auto text-center"
           initial={{ opacity: 0, y: 40 }}
           animate={intro.visible ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.7 }}
@@ -238,6 +248,7 @@ export default function Home() {
             in prodotti digitali ad alto impatto.
           </p>
         </motion.div>
+      </div>
       </section>
 
       {/* Services */}
@@ -246,25 +257,37 @@ export default function Home() {
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-12" style={{ color: "#0D1B6E" }}>
             I Quattro Servizi
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {services.map((svc, i) => (
-              <motion.div
-                key={svc.title}
-                className="rounded-2xl p-6 border"
-                style={{ background: "#fff", borderColor: "rgba(0,174,239,0.15)" }}
-                initial={{ opacity: 0, y: 30 }}
-                animate={servicesSection.visible ? { opacity: 1, y: 0 } : {}}
-                transition={{ duration: 0.5, delay: i * 0.12 }}
-              >
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4"
-                  style={{ background: "rgba(0,174,239,0.1)" }}>
-                  <svc.icon className="h-5 w-5" style={{ color: "#00AEEF" }} />
-                </div>
-                <h3 className="text-base font-bold mb-2" style={{ color: "#0D1B6E" }}>{svc.title}</h3>
-                <p className="text-sm leading-relaxed" style={{ color: "#4A5568" }}>{svc.description}</p>
-              </motion.div>
-            ))}
-          </div>
+          <Carousel className="w-full" opts={{ align: "start", loop: true }}>
+            <CarouselContent>
+              {services.map((svc, i) => (
+                <CarouselItem key={svc.title} className="md:basis-1/2 lg:basis-1/3">
+                  <motion.div
+                    className="rounded-2xl overflow-hidden border h-full"
+                    style={{ background: "#fff", borderColor: "rgba(0,174,239,0.15)" }}
+                    initial={{ opacity: 0, y: 30 }}
+                    animate={servicesSection.visible ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.5, delay: i * 0.12 }}
+                  >
+                    <div className="w-full h-40 overflow-hidden">
+                      <img
+                        src={cardAiReporting}
+                        alt={svc.title}
+                        className="w-full h-full object-cover object-top"
+                      />
+                    </div>
+                    <div className="p-6">
+                      <h3 className="text-base font-bold mb-2" style={{ color: "#0D1B6E" }}>{svc.title}</h3>
+                      <p className="text-sm leading-relaxed" style={{ color: "#4A5568" }}>{svc.description}</p>
+                    </div>
+                  </motion.div>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            <div className="flex justify-center gap-4 mt-8">
+              <CarouselPrevious className="static translate-y-0" />
+              <CarouselNext className="static translate-y-0" />
+            </div>
+          </Carousel>
         </div>
       </section>
 
