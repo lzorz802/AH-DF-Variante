@@ -204,9 +204,9 @@ export default function Home() {
           )}
 
           {/* Hero text */}
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-5xl whitespace-nowrap">
-            Soluzioni digitali concrete ed innovative per la Customer e la User Experience
-          </h1>
+         <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-5xl">
+          Soluzioni digitali concrete ed innovative per la Customer e la User Experience
+         </h1>
           
         </div>
       </section>
