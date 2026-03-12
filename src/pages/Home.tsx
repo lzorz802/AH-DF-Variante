@@ -248,7 +248,6 @@ export default function Home() {
             in prodotti digitali ad alto impatto.
           </p>
         </motion.div>
-      </div>
       </section>
 
       {/* Services */}
