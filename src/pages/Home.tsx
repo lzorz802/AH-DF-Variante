@@ -6,6 +6,12 @@ import heroBg from "@/assets/hero-bg.png";
 import cardAiReporting from "@/assets/card-ai-reporting.png";
 import cardBuildingExperience from "@/assets/card-building-experience.png";
 import cardGestioneCanali from "@/assets/card-gestione-canali.png";
+/* nuove immagini richieste */
+import aiAgentImg from "@/assets/AI Agent.png";
+import digitalChannelsImg from "@/assets/Digital Channels.png";
+import buildingExperienceImg from "@/assets/Building Experience.png";
+import aiEnhancedReportingImg from "@/assets/AI Enhanced Reporting.png";
+
 import { useState, useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 
@@ -38,21 +44,25 @@ const services = [
     icon: Building2,
     title: "Soluzioni digitali per la building experience",
     description: "Ecosistemi integrati per la digitalizzazione degli edifici e dei servizi connessi.",
+    image: buildingExperienceImg, // Building Experience.png
   },
   {
     icon: BarChart3,
     title: "AI-enhanced reporting",
     description: "Reportistica avanzata integrata con agenti conversazionali per l'interrogazione in linguaggio naturale.",
+    image: aiEnhancedReportingImg, // AI Enhanced Reporting.png
   },
   {
     icon: Layout,
     title: "Gestione integrata dei canali digitali",
     description: "Ottimizzazione dei touchpoint digitali e web app multiservizio come entry point unificato.",
+    image: digitalChannelsImg, // Digital Channels.png
   },
   {
     icon: Bot,
     title: "Agenti AI su misura",
     description: "Agenti di intelligenza artificiale personalizzati a supporto dell'efficientamento organizzativo.",
+    image: aiAgentImg, // AI Agent.png
   },
 ];
 
@@ -170,24 +180,32 @@ export default function Home() {
   const servicesSection = useInView();
   const valuesSection = useInView();
 
-  // Carousel state: start from second item so left/right visible
-  const [activeService, setActiveService] = useState(1);
+  // number of services
   const nServices = services.length;
 
-  // Refs to measure viewport for accurate translate
-  const viewportRef = useRef<HTMLDivElement | null>(null);
-  const itemRef = useRef<HTMLDivElement | null>(null);
+  // start centered on the second service (index 1)
+  const startIndex = 1;
 
-  // layout measurements (desktop)
+  // We'll use a "virtual" index on an extended array (3 copies) to create the infinite illusion.
+  // extended length = 3 * nServices; the middle block is indices [nServices .. 2*nServices-1]
+  const [virtualIndex, setVirtualIndex] = useState(nServices + startIndex);
+  const virtualIndexRef = useRef(virtualIndex);
+  useEffect(() => { virtualIndexRef.current = virtualIndex; }, [virtualIndex]);
+
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [instantReset, setInstantReset] = useState(false);
+
+  // Refs and sizing
+  const viewportRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(820);
-  const [itemWidth, setItemWidth] = useState<number>(260);
+  const [itemWidth, setItemWidth] = useState<number>(300);
   const gap = 24;
 
   useEffect(() => {
     const computeSizes = () => {
-      const vw = viewportRef.current?.clientWidth ?? 820;
+      const vw = viewportRef.current?.clientWidth ?? window.innerWidth;
       const cw = Math.min(vw, 980);
-      const iw = Math.min(360, Math.floor(cw * 0.32));
+      const iw = Math.min(420, Math.floor(cw * 0.32));
       setContainerWidth(cw);
       setItemWidth(iw);
     };
@@ -196,23 +214,61 @@ export default function Home() {
     return () => window.removeEventListener("resize", computeSizes);
   }, []);
 
-  const prevService = () => setActiveService((s) => (s - 1 + nServices) % nServices);
-  const nextService = () => setActiveService((s) => (s + 1) % nServices);
-  const goTo = (idx: number) => setActiveService(idx);
+  // Build an extended array (3 copies)
+  const extendedServices = [...services, ...services, ...services];
 
-  const getIdx = (offset: number) => (activeService + offset + nServices) % nServices;
-
-  // compute translateX so that the active item is centered
-  const computeTrackX = () => {
-    if ((viewportRef.current?.clientWidth ?? window.innerWidth) < 768) {
-      return 0;
+  // compute track X from virtualIndex (center the active item)
+  const computeTrackX = (vIndex: number) => {
+    const vw = viewportRef.current?.clientWidth ?? window.innerWidth;
+    if (vw < 768) {
+      // on mobile, center the middle block's item visually; we will render items full width, so keep x = 0
+      // but we still compute so that animate prop receives a value
+      const step = itemWidth + gap;
+      const centerOffset = (vw / 2) - (itemWidth / 2);
+      return -vIndex * step + centerOffset;
     }
     const step = itemWidth + gap;
     const centerOffset = containerWidth / 2 - itemWidth / 2;
-    return -activeService * step + centerOffset;
+    return -vIndex * step + centerOffset;
   };
 
-  const trackX = computeTrackX();
+  const trackX = computeTrackX(virtualIndex);
+
+  // Handlers
+  const goToVirtual = (newVirtualIndex: number) => {
+    setInstantReset(false);
+    setIsTransitioning(true);
+    setVirtualIndex(newVirtualIndex);
+  };
+
+  const next = () => goToVirtual(virtualIndexRef.current + 1);
+  const prev = () => goToVirtual(virtualIndexRef.current - 1);
+
+  // After animation completes, if we're outside the middle block, snap back to the equivalent middle index
+  const handleAnimationComplete = () => {
+    if (!isTransitioning) return;
+    const v = virtualIndexRef.current;
+    // middle block range: [nServices, 2*nServices - 1]
+    if (v < nServices || v >= 2 * nServices) {
+      // compute equivalent index in middle block
+      const logical = ((v % nServices) + nServices) % nServices; // 0..nServices-1
+      const middleIndex = nServices + logical;
+      // snap instantly to middleIndex
+      setInstantReset(true); // will make transition duration 0 for the snap
+      setVirtualIndex(middleIndex);
+      // small timeout to clear instantReset and isTransitioning
+      setTimeout(() => {
+        setInstantReset(false);
+        setIsTransitioning(false);
+      }, 20);
+    } else {
+      // normal end of transition inside middle block
+      setIsTransitioning(false);
+    }
+  };
+
+  // expose current logical active service
+  const activeLogicalIndex = ((virtualIndex - nServices) % nServices + nServices) % nServices;
 
   return (
     <div className="min-h-screen" style={{ background: "#E8F0FE" }}>
@@ -221,8 +277,8 @@ export default function Home() {
         <img src={heroBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(13,27,110,0.85) 0%, rgba(13,27,110,0.6) 100%)" }} />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-24 flex flex-col items-center text-center">
-          {/* Top bar */}
+        {/* aumentata max-width del titolo per evitare troppi wrap */}
+        <div className="relative z-10 max-w-5xl mx-auto px-6 pt-16 pb-24 flex flex-col items-center text-center">
           <div className="flex items-start justify-between mb-16 w-full">
             <img
               src={logoClean}
@@ -230,7 +286,7 @@ export default function Home() {
               style={{ width: "300px", height: "auto", transform: "scale(1.5)", transformOrigin: "center" }}
             />
           </div>
-          {/* User info — fixed top right */}
+
           {user && (
             <div className="absolute top-6 right-6 flex items-center gap-3">
               <div className="flex items-center gap-2 text-xs text-white/70">
@@ -247,13 +303,11 @@ export default function Home() {
             </div>
           )}
 
-          {/* Hero text - increased max width so lines don't wrap into many */}
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-5xl mb-8">
             Soluzioni digitali concrete ed innovative
             <br />
             per la Customer e la User Experience
           </h1>
-          {/* extra spacer so cards aren't attached underneath */}
           <div style={{ height: 18 }} />
         </div>
       </section>
@@ -296,7 +350,7 @@ export default function Home() {
         </motion.div>
       </section>
 
-      {/* Services: sliding carousel/track with animated translate */}
+      {/* Services: sliding carousel/track with animated translate (infinite illusion) */}
       <section ref={servicesSection.ref} className="py-20 px-6" style={{ background: "#E8F0FE" }}>
         <div className="max-w-5xl mx-auto">
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-8" style={{ color: "#0D1B6E" }}>
@@ -313,34 +367,41 @@ export default function Home() {
               {/* Track: animated translateX */}
               <motion.div
                 animate={{ x: trackX }}
-                transition={{ type: "spring", stiffness: 120, damping: 20 }}
-                className="flex items-center gap-6"
+                transition={instantReset ? { duration: 0 } : { type: "spring", stiffness: 120, damping: 20 }}
+                onAnimationComplete={handleAnimationComplete}
+                className="flex items-center"
                 style={{
-                  width: services.length * (itemWidth + gap),
+                  gap: gap,
+                  width: extendedServices.length * (itemWidth + gap),
                   padding: "28px 0",
                 }}
               >
-                {services.map((svc, idx) => {
-                  const isActive = idx === activeService;
-                  const isMobile = (viewportRef.current?.clientWidth ?? window.innerWidth) < 768;
-                  const baseW = isMobile ? Math.min(480, viewportRef.current?.clientWidth ?? 360) : itemWidth;
+                {extendedServices.map((svc, idx) => {
+                  // isActive = idx === virtualIndex
+                  const isActive = idx === virtualIndex;
+                  const vw = viewportRef.current?.clientWidth ?? window.innerWidth;
+                  const isMobile = vw < 768;
+                  const baseW = isMobile ? Math.min(480, vw) : itemWidth;
+                  const height = isMobile ? 260 : (isActive ? 320 : 180);
+                  const scale = isActive ? 1.06 : 0.92;
+                  const z = isActive ? 30 : 10;
                   return (
                     <div
-                      key={idx}
-                      ref={idx === 0 ? itemRef : null}
-                      className={`rounded-2xl overflow-hidden border flex-shrink-0 transition-transform duration-400 ease-in-out ${isActive ? "z-30" : "z-10"}`}
+                      key={`ext-${idx}`}
+                      className="rounded-2xl overflow-hidden border flex-shrink-0 transition-transform"
                       style={{
                         width: baseW,
-                        height: isMobile ? 260 : isActive ? 300 : 180,
-                        transform: isActive ? "scale(1.08)" : "scale(0.92)",
+                        height,
+                        transform: `scale(${scale})`,
                         background: "#fff",
                         borderColor: isActive ? "rgba(0,174,239,0.15)" : "rgba(0,174,239,0.06)",
                         boxShadow: isActive ? "0 20px 40px rgba(13,27,110,0.12)" : "0 6px 18px rgba(13,27,110,0.06)",
+                        zIndex: z,
                         overflow: "hidden",
                       }}
                     >
                       <img
-                        src={cardAiReporting}
+                        src={svc.image}
                         alt={svc.title}
                         className="w-full h-full object-cover object-top"
                         style={{ display: "block" }}
@@ -351,20 +412,20 @@ export default function Home() {
               </motion.div>
             </div>
 
-            {/* Under the images, title + description of center service */}
+            {/* Under the images, title + description of center service (logical index) */}
             <div className="mt-6 text-center max-w-2xl">
               <h3 className="text-lg md:text-xl font-bold" style={{ color: "#0D1B6E" }}>
-                {services[activeService].title}
+                {services[activeLogicalIndex].title}
               </h3>
               <p className="text-sm mt-2" style={{ color: "#4A5568" }}>
-                {services[activeService].description}
+                {services[activeLogicalIndex].description}
               </p>
             </div>
 
             {/* Controls */}
             <div className="flex items-center gap-6 mt-8">
               <button
-                onClick={prevService}
+                onClick={() => { prev(); }}
                 aria-label="Precedente"
                 className="w-12 h-12 rounded-full flex items-center justify-center border hover:shadow-md transition"
                 style={{ borderColor: "rgba(13,27,110,0.08)", background: "white" }}
@@ -376,16 +437,20 @@ export default function Home() {
                 {services.map((_, idx) => (
                   <button
                     key={idx}
-                    onClick={() => goTo(idx)}
+                    onClick={() => {
+                      // jump to the corresponding logical index in the middle block
+                      const targetVirtual = nServices + idx;
+                      goToVirtual(targetVirtual);
+                    }}
                     aria-label={`Vai al servizio ${idx + 1}`}
-                    className={`w-2 h-2 rounded-full transition-all ${idx === activeService ? "scale-110" : "opacity-50"}`}
-                    style={{ background: idx === activeService ? "#0D1B6E" : "#A0AEC0" }}
+                    className={`w-2 h-2 rounded-full transition-all ${idx === activeLogicalIndex ? "scale-110" : "opacity-50"}`}
+                    style={{ background: idx === activeLogicalIndex ? "#0D1B6E" : "#A0AEC0" }}
                   />
                 ))}
               </div>
 
               <button
-                onClick={nextService}
+                onClick={() => { next(); }}
                 aria-label="Successivo"
                 className="w-12 h-12 rounded-full flex items-center justify-center border hover:shadow-md transition"
                 style={{ borderColor: "rgba(13,27,110,0.08)", background: "white" }}
