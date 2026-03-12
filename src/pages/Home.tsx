@@ -274,7 +274,7 @@ export default function Home() {
 
         {/* aumentata max-width del titolo per evitare troppi wrap */}
         <div className="relative z-10 max-w-5xl mx-auto px-6 pt-16 pb-24 flex flex-col items-center text-center">
-          <div className="flex items-start justify-between mb-16 w-full">
+          <div className="flex items-center justify-center mb-16 w-full">
             <img
               src={logoClean}
               alt="KPMG Digital Factory"
