@@ -170,16 +170,53 @@ export default function Home() {
   const servicesSection = useInView();
   const valuesSection = useInView();
 
-  // Custom carousel state (we'll show left / center / right, center is larger)
+  // Carousel state
   const [activeService, setActiveService] = useState(0);
   const nServices = services.length;
 
+  // Refs to measure viewport for accurate translate
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const itemRef = useRef<HTMLDivElement | null>(null);
+
+  // layout measurements (desktop)
+  const [containerWidth, setContainerWidth] = useState<number>(820);
+  const [itemWidth, setItemWidth] = useState<number>(260);
+  const gap = 24;
+
+  useEffect(() => {
+    const computeSizes = () => {
+      const vw = viewportRef.current?.clientWidth ?? 820;
+      // desktop: keep containerWidth to min(vw, 900) with some padding
+      const cw = Math.min(vw, 980);
+      // item width: approx 38% of container for center, but we use uniform item base and scale center
+      const iw = Math.min(360, Math.floor(cw * 0.32));
+      setContainerWidth(cw);
+      setItemWidth(iw);
+    };
+    computeSizes();
+    window.addEventListener("resize", computeSizes);
+    return () => window.removeEventListener("resize", computeSizes);
+  }, []);
+
   const prevService = () => setActiveService((s) => (s - 1 + nServices) % nServices);
   const nextService = () => setActiveService((s) => (s + 1) % nServices);
+  const goTo = (idx: number) => setActiveService(idx);
 
-  const getIdx = (offset: number) => {
-    return (activeService + offset + nServices) % nServices;
+  const getIdx = (offset: number) => (activeService + offset + nServices) % nServices;
+
+  // compute translateX so that the active item is centered
+  // trackX = -activeIndex * (itemWidth + gap) + (containerWidth / 2 - itemWidth / 2)
+  const computeTrackX = () => {
+    // mobile: single centered, no sliding
+    if ((viewportRef.current?.clientWidth ?? window.innerWidth) < 768) {
+      return 0;
+    }
+    const step = itemWidth + gap;
+    const centerOffset = containerWidth / 2 - itemWidth / 2;
+    return -activeService * step + centerOffset;
   };
+
+  const trackX = computeTrackX();
 
   return (
     <div className="min-h-screen" style={{ background: "#E8F0FE" }}>
@@ -188,7 +225,7 @@ export default function Home() {
         <img src={heroBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(13,27,110,0.85) 0%, rgba(13,27,110,0.6) 100%)" }} />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-8 flex flex-col items-center text-center">
+        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-20 flex flex-col items-center text-center">
           {/* Top bar */}
           <div className="flex items-start justify-between mb-16 w-full">
             <img
@@ -214,12 +251,14 @@ export default function Home() {
             </div>
           )}
 
-          {/* Hero text - forced to two lines using explicit <br /> */}
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-3xl">
+          {/* Hero text - forced to two lines using explicit <br /> and spacing below */}
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-3xl mb-6">
             Soluzioni digitali concrete ed innovative
             <br />
             per la Customer e la User Experience
           </h1>
+          {/* extra spacer so cards aren't attached underneath */}
+          <div style={{ height: 16 }} />
         </div>
       </section>
 
@@ -253,15 +292,15 @@ export default function Home() {
             Cos'è la Digital Factory?
           </h2>
           <p className="text-lg text-white/75 leading-relaxed">
-            La Digital Factory nasce all'interno del team customer KPMG come centro di eccellenza che combina competenze su 
-            tecnologie di frontiera, architetture dati, intelligenza artificiale e UX/UI design per creare soluzioni digitali 
-            innovative. Funziona come una fabbrica dell'innovazione, trasformando idee e bisogni concreti delle organizzazioni 
+            La Digital Factory nasce all'interno del team customer KPMG come centro di eccellenza che combina competenze su
+            tecnologie di frontiera, architetture dati, intelligenza artificiale e UX/UI design per creare soluzioni digitali
+            innovative. Funziona come una fabbrica dell'innovazione, trasformando idee e bisogni concreti delle organizzazioni
             in prodotti digitali ad alto impatto.
           </p>
         </motion.div>
       </section>
 
-      {/* Services: custom carousel where center image is larger */}
+      {/* Services: sliding carousel/track with animated translate */}
       <section ref={servicesSection.ref} className="py-20 px-6" style={{ background: "#E8F0FE" }}>
         <div className="max-w-5xl mx-auto">
           <h2 className="text-2xl md:text-3xl font-bold text-center mb-8" style={{ color: "#0D1B6E" }}>
@@ -269,61 +308,62 @@ export default function Home() {
           </h2>
 
           <div className="relative flex flex-col items-center">
-            {/* Carousel viewport */}
-            <div className="w-full flex items-center justify-center gap-6 md:gap-10">
-              {/* Left (small) */}
+            {/* Viewport */}
+            <div
+              ref={viewportRef}
+              className="w-full overflow-hidden"
+              style={{ padding: "0 24px" }}
+            >
+              {/* Track: animated translateX */}
               <motion.div
-                className="hidden md:block rounded-2xl overflow-hidden border flex-shrink-0 shadow-sm"
-                initial={{ opacity: 0.6, scale: 0.9 }}
-                animate={servicesSection.visible ? { opacity: 1, scale: 0.95 } : {}}
-                transition={{ duration: 0.4 }}
-                style={{ background: "#fff", borderColor: "rgba(0,174,239,0.08)", width: 160, height: 120 }}
+                animate={{ x: trackX }}
+                transition={{ type: "spring", stiffness: 120, damping: 20 }}
+                className="flex items-center gap-6"
+                style={{
+                  // ensure the track is wide enough
+                  width: services.length * (itemWidth + gap),
+                  padding: "28px 0",
+                }}
               >
-                <img
-                  src={cardAiReporting}
-                  alt={services[getIdx(-1)].title}
-                  className="w-full h-full object-cover object-top"
-                />
-              </motion.div>
-
-              {/* Center (large) */}
-              <motion.div
-                className="rounded-2xl overflow-hidden border shadow-lg flex-shrink-0"
-                initial={{ opacity: 0, y: 20 }}
-                animate={servicesSection.visible ? { opacity: 1, y: 0 } : {}}
-                transition={{ duration: 0.5 }}
-                style={{ background: "#fff", borderColor: "rgba(0,174,239,0.15)", width: 460, height: 260 }}
-              >
-                <img
-                  src={cardAiReporting}
-                  alt={services[getIdx(0)].title}
-                  className="w-full h-full object-cover object-top"
-                />
-              </motion.div>
-
-              {/* Right (small) */}
-              <motion.div
-                className="hidden md:block rounded-2xl overflow-hidden border flex-shrink-0 shadow-sm"
-                initial={{ opacity: 0.6, scale: 0.9 }}
-                animate={servicesSection.visible ? { opacity: 1, scale: 0.95 } : {}}
-                transition={{ duration: 0.4 }}
-                style={{ background: "#fff", borderColor: "rgba(0,174,239,0.08)", width: 160, height: 120 }}
-              >
-                <img
-                  src={cardAiReporting}
-                  alt={services[getIdx(1)].title}
-                  className="w-full h-full object-cover object-top"
-                />
+                {services.map((svc, idx) => {
+                  const isActive = idx === activeService;
+                  // On small screens we want items centered and full width
+                  const isMobile = (viewportRef.current?.clientWidth ?? window.innerWidth) < 768;
+                  const baseW = isMobile ? Math.min(480, viewportRef.current?.clientWidth ?? 360) : itemWidth;
+                  return (
+                    <div
+                      key={idx}
+                      ref={idx === 0 ? itemRef : null}
+                      className={`rounded-2xl overflow-hidden border flex-shrink-0 transition-transform duration-400 ease-in-out ${isActive ? "z-30" : "z-10"}`}
+                      style={{
+                        width: baseW,
+                        height: isMobile ? 260 : isActive ? 300 : 180,
+                        transform: isActive ? "scale(1.08)" : "scale(0.92)",
+                        background: "#fff",
+                        borderColor: isActive ? "rgba(0,174,239,0.15)" : "rgba(0,174,239,0.06)",
+                        boxShadow: isActive ? "0 20px 40px rgba(13,27,110,0.12)" : "0 6px 18px rgba(13,27,110,0.06)",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <img
+                        src={cardAiReporting}
+                        alt={svc.title}
+                        className="w-full h-full object-cover object-top"
+                        style={{ display: "block" }}
+                      />
+                    </div>
+                  );
+                })}
               </motion.div>
             </div>
 
             {/* Under the images, title + description of center service */}
             <div className="mt-6 text-center max-w-2xl">
               <h3 className="text-lg md:text-xl font-bold" style={{ color: "#0D1B6E" }}>
-                {services[getIdx(0)].title}
+                {services[activeService].title}
               </h3>
               <p className="text-sm mt-2" style={{ color: "#4A5568" }}>
-                {services[getIdx(0)].description}
+                {services[activeService].description}
               </p>
             </div>
 
@@ -337,18 +377,19 @@ export default function Home() {
               >
                 <ChevronLeft className="h-5 w-5" />
               </button>
+
               <div className="flex gap-2 items-center">
-                {/* small indicators */}
                 {services.map((_, idx) => (
                   <button
                     key={idx}
-                    onClick={() => setActiveService(idx)}
+                    onClick={() => goTo(idx)}
                     aria-label={`Vai al servizio ${idx + 1}`}
                     className={`w-2 h-2 rounded-full transition-all ${idx === activeService ? "scale-110" : "opacity-50"}`}
                     style={{ background: idx === activeService ? "#0D1B6E" : "#A0AEC0" }}
                   />
                 ))}
               </div>
+
               <button
                 onClick={nextService}
                 aria-label="Successivo"
