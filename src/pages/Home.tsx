@@ -3,9 +3,6 @@ import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import logoClean from "@/assets/logo_digital_factory_clean.png";
 import heroBg from "@/assets/hero-bg.png";
-import cardAiReporting from "@/assets/card-ai-reporting.png";
-import cardBuildingExperience from "@/assets/card-building-experience.png";
-import cardGestioneCanali from "@/assets/card-gestione-canali.png";
 /* nuove immagini richieste */
 import aiAgentImg from "@/assets/AI Agent.png";
 import digitalChannelsImg from "@/assets/Digital Channels.png";
@@ -21,21 +18,21 @@ const cards = [
     subtitle: "Report intelligenti arricchiti dall'AI, con insight in tempo reale per decisioni più rapide.",
     icon: Settings,
     link: "/reports",
-    image: cardAiReporting,
+    image: aiEnhancedReportingImg, // sostituita
   },
   {
     title: "Soluzioni digitali innovative per la building experience",
     subtitle: "Strumenti digitali integrati per trasformare la gestione e la fruizione degli spazi.",
     icon: Database,
     link: "https://regionevenetobimsmartplatform.franchetti.tech/",
-    image: cardBuildingExperience,
+    image: buildingExperienceImg, // sostituita
   },
   {
     title: "Gestione integrata dei canali digitali",
     subtitle: "Monitora e ottimizza tutti i touchpoint digitali da un'unica piattaforma centralizzata.",
     icon: Globe,
     link: "https://regionevenetobimsmartplatform.franchetti.tech/",
-    image: cardGestioneCanali,
+    image: digitalChannelsImg, // sostituita
   },
 ];
 
@@ -221,8 +218,6 @@ export default function Home() {
   const computeTrackX = (vIndex: number) => {
     const vw = viewportRef.current?.clientWidth ?? window.innerWidth;
     if (vw < 768) {
-      // on mobile, center the middle block's item visually; we will render items full width, so keep x = 0
-      // but we still compute so that animate prop receives a value
       const step = itemWidth + gap;
       const centerOffset = (vw / 2) - (itemWidth / 2);
       return -vIndex * step + centerOffset;
@@ -377,7 +372,6 @@ export default function Home() {
                 }}
               >
                 {extendedServices.map((svc, idx) => {
-                  // isActive = idx === virtualIndex
                   const isActive = idx === virtualIndex;
                   const vw = viewportRef.current?.clientWidth ?? window.innerWidth;
                   const isMobile = vw < 768;
@@ -438,7 +432,6 @@ export default function Home() {
                   <button
                     key={idx}
                     onClick={() => {
-                      // jump to the corresponding logical index in the middle block
                       const targetVirtual = nServices + idx;
                       goToVirtual(targetVirtual);
                     }}
