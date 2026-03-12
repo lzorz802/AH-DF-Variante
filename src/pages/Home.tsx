@@ -205,12 +205,9 @@ export default function Home() {
 
           {/* Hero text */}
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-5xl whitespace-nowrap">
-            Eccellenza digitale, dati, AI, UX
+            Soluzioni digitali concrete ed innovative per la Customer e la User Experience
           </h1>
-          <p className="mt-5 text-base md:text-lg text-white/80 max-w-3xl leading-relaxed">
-            Centro di eccellenza che integra digitale, dati e AI per creare soluzioni scalabili.
-            Trasforma bisogni di business in prodotti digitali ad alto impatto.
-          </p>
+          
         </div>
       </section>
 
@@ -235,9 +232,9 @@ export default function Home() {
             Cos'è la Digital Factory?
           </h2>
           <p className="text-lg text-white/75 leading-relaxed">
-            La Digital Factory è un centro di eccellenza KPMG che combina competenze su tecnologie digitali,
-            architetture dati, intelligenza artificiale e UX/UI design per creare soluzioni digitali scalabili.
-            Funziona come una fabbrica dell'innovazione, trasformando idee e bisogni concreti delle organizzazioni
+            La Digital Factory nasce all'interno del team customer KPMG come centro di eccellenza che combina competenze su 
+            tecnologie di frontiera, architetture dati, intelligenza artificiale e UX/UI design per creare soluzioni digitali 
+            innovative. Funziona come una fabbrica dell'innovazione, trasformando idee e bisogni concreti delle organizzazioni 
             in prodotti digitali ad alto impatto.
           </p>
         </motion.div>
