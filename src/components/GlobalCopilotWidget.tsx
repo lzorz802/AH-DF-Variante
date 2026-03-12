@@ -6,12 +6,50 @@ import aiAssistantAvatar from "@/assets/kpmg_df_ai_assistant.png";
 const N8N_WEBHOOK_URL =
   "https://gsprst.app.n8n.cloud/webhook/cf1de04f-3e38-426c-89f0-3bdb110a5dcf/chat";
 
-// Genera un sessionId unico per questa sessione browser
-const SESSION_ID = "session-" + Math.random().toString(36).slice(2) + Date.now();
+// Genera un sessionId unico per questa sessione browser (lazy, dentro il componente)
+function generateSessionId() {
+  return "session-" + Math.random().toString(36).slice(2) + Date.now();
+}
 
 interface Message {
   role: "user" | "assistant";
   text: string;
+}
+
+// Estrae in modo sicuro una stringa dalla risposta n8n,
+// qualunque sia la struttura restituita.
+function extractReply(data: unknown): string {
+  if (!data || typeof data !== "object") return "Risposta non disponibile.";
+
+  const d = data as Record<string, unknown>;
+
+  // n8n chatTrigger può restituire array o oggetto
+  const raw =
+    d?.output ??
+    d?.text ??
+    d?.message ??
+    d?.response ??
+    (Array.isArray(d) ? (d as unknown[])[0] : undefined);
+
+  if (raw === null || raw === undefined) return "Risposta non disponibile.";
+
+  // Se è già una stringa, perfetto
+  if (typeof raw === "string") return raw.trim() || "Risposta non disponibile.";
+
+  // Se è un oggetto, prova a estrarne il testo
+  if (typeof raw === "object") {
+    const r = raw as Record<string, unknown>;
+    const nested = r?.output ?? r?.text ?? r?.message ?? r?.response ?? r?.content;
+    if (typeof nested === "string") return nested.trim() || "Risposta non disponibile.";
+    // Ultimo fallback: JSON stringify per non crashare React
+    try {
+      return JSON.stringify(raw);
+    } catch {
+      return "Risposta non disponibile.";
+    }
+  }
+
+  return String(raw);
 }
 
 export const GlobalCopilotWidget = () => {
@@ -28,6 +66,9 @@ export const GlobalCopilotWidget = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const location = useLocation();
+
+  // SessionId per-istanza del componente (non a livello di modulo)
+  const sessionIdRef = useRef<string>(generateSessionId());
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -57,20 +98,16 @@ export const GlobalCopilotWidget = () => {
       const res = await fetch(N8N_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatInput: text, sessionId: SESSION_ID }),
+        body: JSON.stringify({
+          chatInput: text,
+          sessionId: sessionIdRef.current,
+        }),
       });
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const data = await res.json();
-
-      // n8n chatTrigger risponde con { output: "..." } oppure { text: "..." }
-      const reply =
-        data?.output ??
-        data?.text ??
-        data?.message ??
-        data?.response ??
-        "Risposta non disponibile.";
+      const data: unknown = await res.json();
+      const reply = extractReply(data);
 
       setMessages((prev) => [...prev, { role: "assistant", text: reply }]);
     } catch (err) {
