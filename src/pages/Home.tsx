@@ -170,8 +170,8 @@ export default function Home() {
   const servicesSection = useInView();
   const valuesSection = useInView();
 
-  // Carousel state
-  const [activeService, setActiveService] = useState(0);
+  // Carousel state: start from second item so left/right visible
+  const [activeService, setActiveService] = useState(1);
   const nServices = services.length;
 
   // Refs to measure viewport for accurate translate
@@ -186,9 +186,7 @@ export default function Home() {
   useEffect(() => {
     const computeSizes = () => {
       const vw = viewportRef.current?.clientWidth ?? 820;
-      // desktop: keep containerWidth to min(vw, 900) with some padding
       const cw = Math.min(vw, 980);
-      // item width: approx 38% of container for center, but we use uniform item base and scale center
       const iw = Math.min(360, Math.floor(cw * 0.32));
       setContainerWidth(cw);
       setItemWidth(iw);
@@ -205,9 +203,7 @@ export default function Home() {
   const getIdx = (offset: number) => (activeService + offset + nServices) % nServices;
 
   // compute translateX so that the active item is centered
-  // trackX = -activeIndex * (itemWidth + gap) + (containerWidth / 2 - itemWidth / 2)
   const computeTrackX = () => {
-    // mobile: single centered, no sliding
     if ((viewportRef.current?.clientWidth ?? window.innerWidth) < 768) {
       return 0;
     }
@@ -225,7 +221,7 @@ export default function Home() {
         <img src={heroBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(13,27,110,0.85) 0%, rgba(13,27,110,0.6) 100%)" }} />
 
-        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-20 flex flex-col items-center text-center">
+        <div className="relative z-10 max-w-7xl mx-auto px-6 pt-16 pb-24 flex flex-col items-center text-center">
           {/* Top bar */}
           <div className="flex items-start justify-between mb-16 w-full">
             <img
@@ -251,14 +247,14 @@ export default function Home() {
             </div>
           )}
 
-          {/* Hero text - forced to two lines using explicit <br /> and spacing below */}
-          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-3xl mb-6">
+          {/* Hero text - increased max width so lines don't wrap into many */}
+          <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-5xl mb-8">
             Soluzioni digitali concrete ed innovative
             <br />
             per la Customer e la User Experience
           </h1>
           {/* extra spacer so cards aren't attached underneath */}
-          <div style={{ height: 16 }} />
+          <div style={{ height: 18 }} />
         </div>
       </section>
 
@@ -320,14 +316,12 @@ export default function Home() {
                 transition={{ type: "spring", stiffness: 120, damping: 20 }}
                 className="flex items-center gap-6"
                 style={{
-                  // ensure the track is wide enough
                   width: services.length * (itemWidth + gap),
                   padding: "28px 0",
                 }}
               >
                 {services.map((svc, idx) => {
                   const isActive = idx === activeService;
-                  // On small screens we want items centered and full width
                   const isMobile = (viewportRef.current?.clientWidth ?? window.innerWidth) < 768;
                   const baseW = isMobile ? Math.min(480, viewportRef.current?.clientWidth ?? 360) : itemWidth;
                   return (
