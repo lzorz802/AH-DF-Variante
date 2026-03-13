@@ -362,28 +362,22 @@ export default function Home() {
                   const vw = viewportRef.current?.clientWidth ?? window.innerWidth;
                   const isMobile = vw < 768;
                   const baseW = isMobile ? Math.min(480, vw) : itemWidth;
-                  const activeHeight = isMobile ? 260 : 320;
-                  const inactiveHeight = isMobile ? 260 : 200;
+                  const height = isMobile ? 260 : (isActive ? 320 : 180);
+                  const scale = isActive ? 1.06 : 0.92;
                   const z = isActive ? 30 : 10;
                   return (
-                    <motion.div
+                    <div
                       key={`ext-${idx}`}
-                      className="rounded-2xl overflow-hidden border flex-shrink-0"
-                      animate={{
-                        scale: isActive ? 1.06 : 0.92,
-                        height: isActive ? activeHeight : inactiveHeight,
-                        borderColor: isActive ? "rgba(0,174,239,0.15)" : "rgba(0,174,239,0.06)",
-                        boxShadow: isActive
-                          ? "0 20px 40px rgba(13,27,110,0.12)"
-                          : "0 6px 18px rgba(13,27,110,0.06)",
-                      }}
-                      transition={{ type: "spring", stiffness: 200, damping: 28 }}
+                      className="rounded-2xl overflow-hidden border flex-shrink-0 transition-transform"
                       style={{
                         width: baseW,
+                        height,
+                        transform: `scale(${scale})`,
                         background: "#fff",
+                        borderColor: isActive ? "rgba(0,174,239,0.15)" : "rgba(0,174,239,0.06)",
+                        boxShadow: isActive ? "0 20px 40px rgba(13,27,110,0.12)" : "0 6px 18px rgba(13,27,110,0.06)",
                         zIndex: z,
                         overflow: "hidden",
-                        originY: 0.5,
                       }}
                     >
                       <img
@@ -392,7 +386,7 @@ export default function Home() {
                         className="w-full h-full object-cover object-top"
                         style={{ display: "block" }}
                       />
-                    </motion.div>
+                    </div>
                   );
                 })}
               </motion.div>
