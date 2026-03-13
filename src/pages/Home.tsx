@@ -362,8 +362,8 @@ export default function Home() {
                   const vw = viewportRef.current?.clientWidth ?? window.innerWidth;
                   const isMobile = vw < 768;
                   const baseW = isMobile ? Math.min(480, vw) : itemWidth;
-                  const height = isMobile ? 260 : (isActive ? 320 : 180);
-                  const scale = isActive ? 1.06 : 0.92;
+                  const height = isMobile ? 260 : 260;
+                  const scale = isActive ? 1.08 : 0.88;
                   const z = isActive ? 30 : 10;
                   return (
                     <div
