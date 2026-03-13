@@ -18,21 +18,21 @@ const cards = [
     subtitle: "Report intelligenti arricchiti dall'AI, con insight in tempo reale per decisioni più rapide.",
     icon: Settings,
     link: "/reports",
-    image: aiEnhancedReportingImg, // sostituita
+    image: aiEnhancedReportingImg,
   },
   {
     title: "Soluzioni digitali innovative per la building experience",
     subtitle: "Strumenti digitali integrati per trasformare la gestione e la fruizione degli spazi.",
     icon: Database,
     link: "https://regionevenetobimsmartplatform.franchetti.tech/",
-    image: buildingExperienceImg, // sostituita
+    image: buildingExperienceImg,
   },
   {
     title: "Gestione integrata dei canali digitali",
     subtitle: "Monitora e ottimizza tutti i touchpoint digitali da un'unica piattaforma centralizzata.",
     icon: Globe,
     link: "https://regionevenetobimsmartplatform.franchetti.tech/",
-    image: digitalChannelsImg, // sostituita
+    image: digitalChannelsImg,
   },
 ];
 
@@ -41,25 +41,25 @@ const services = [
     icon: Building2,
     title: "Soluzioni digitali per la building experience",
     description: "Ecosistemi integrati per la digitalizzazione degli edifici e dei servizi connessi.",
-    image: buildingExperienceImg, // Building Experience.png
+    image: buildingExperienceImg,
   },
   {
     icon: BarChart3,
     title: "AI-enhanced reporting",
     description: "Reportistica avanzata integrata con agenti conversazionali per l'interrogazione in linguaggio naturale.",
-    image: aiEnhancedReportingImg, // AI Enhanced Reporting.png
+    image: aiEnhancedReportingImg,
   },
   {
     icon: Layout,
     title: "Gestione integrata dei canali digitali",
     description: "Ottimizzazione dei touchpoint digitali e web app multiservizio come entry point unificato.",
-    image: digitalChannelsImg, // Digital Channels.png
+    image: digitalChannelsImg,
   },
   {
     icon: Bot,
     title: "Agenti AI su misura",
     description: "Agenti di intelligenza artificiale personalizzati a supporto dell'efficientamento organizzativo.",
-    image: aiAgentImg, // AI Agent.png
+    image: aiAgentImg,
   },
 ];
 
@@ -177,14 +177,8 @@ export default function Home() {
   const servicesSection = useInView();
   const valuesSection = useInView();
 
-  // number of services
   const nServices = services.length;
-
-  // start centered on the second service (index 1)
   const startIndex = 1;
-
-  // We'll use a "virtual" index on an extended array (3 copies) to create the infinite illusion.
-  // extended length = 3 * nServices; the middle block is indices [nServices .. 2*nServices-1]
   const [virtualIndex, setVirtualIndex] = useState(nServices + startIndex);
   const virtualIndexRef = useRef(virtualIndex);
   useEffect(() => { virtualIndexRef.current = virtualIndex; }, [virtualIndex]);
@@ -192,7 +186,6 @@ export default function Home() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [instantReset, setInstantReset] = useState(false);
 
-  // Refs and sizing
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(820);
   const [itemWidth, setItemWidth] = useState<number>(300);
@@ -211,10 +204,8 @@ export default function Home() {
     return () => window.removeEventListener("resize", computeSizes);
   }, []);
 
-  // Build an extended array (3 copies)
   const extendedServices = [...services, ...services, ...services];
 
-  // compute track X from virtualIndex (center the active item)
   const computeTrackX = (vIndex: number) => {
     const vw = viewportRef.current?.clientWidth ?? window.innerWidth;
     if (vw < 768) {
@@ -229,7 +220,6 @@ export default function Home() {
 
   const trackX = computeTrackX(virtualIndex);
 
-  // Handlers
   const goToVirtual = (newVirtualIndex: number) => {
     setInstantReset(false);
     setIsTransitioning(true);
@@ -239,30 +229,23 @@ export default function Home() {
   const next = () => goToVirtual(virtualIndexRef.current + 1);
   const prev = () => goToVirtual(virtualIndexRef.current - 1);
 
-  // After animation completes, if we're outside the middle block, snap back to the equivalent middle index
   const handleAnimationComplete = () => {
     if (!isTransitioning) return;
     const v = virtualIndexRef.current;
-    // middle block range: [nServices, 2*nServices - 1]
     if (v < nServices || v >= 2 * nServices) {
-      // compute equivalent index in middle block
-      const logical = ((v % nServices) + nServices) % nServices; // 0..nServices-1
+      const logical = ((v % nServices) + nServices) % nServices;
       const middleIndex = nServices + logical;
-      // snap instantly to middleIndex
-      setInstantReset(true); // will make transition duration 0 for the snap
+      setInstantReset(true);
       setVirtualIndex(middleIndex);
-      // small timeout to clear instantReset and isTransitioning
       setTimeout(() => {
         setInstantReset(false);
         setIsTransitioning(false);
       }, 20);
     } else {
-      // normal end of transition inside middle block
       setIsTransitioning(false);
     }
   };
 
-  // expose current logical active service
   const activeLogicalIndex = ((virtualIndex - nServices) % nServices + nServices) % nServices;
 
   return (
@@ -272,7 +255,26 @@ export default function Home() {
         <img src={heroBg} alt="" className="absolute inset-0 w-full h-full object-cover" />
         <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(13,27,110,0.85) 0%, rgba(13,27,110,0.6) 100%)" }} />
 
-        {/* aumentata max-width del titolo per evitare troppi wrap */}
+        {/* ✅ Blocco utente spostato qui, direttamente dentro <section> con z-20 */}
+        {user && (
+          <div className="absolute top-6 right-6 z-20 flex items-center gap-3">
+            <div className="flex items-center gap-2 text-xs text-white/70">
+              <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
+                <User className="h-3.5 w-3.5 text-white" />
+              </div>
+              <span className="hidden sm:block max-w-[160px] truncate">{user.email}</span>
+            </div>
+            <button
+              onClick={signOut}
+              title="Esci"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Esci</span>
+            </button>
+          </div>
+        )}
+
         <div className="relative z-10 max-w-5xl mx-auto px-6 pt-16 pb-24 flex flex-col items-center text-center">
           <div className="flex items-center justify-center mb-16 w-full">
             <img
@@ -281,22 +283,6 @@ export default function Home() {
               style={{ width: "300px", height: "auto", transform: "scale(1.5)", transformOrigin: "center" }}
             />
           </div>
-
-          {user && (
-            <div className="absolute top-6 right-6 flex items-center gap-3">
-              <div className="flex items-center gap-2 text-xs text-white/70">
-                <div className="w-7 h-7 rounded-full bg-white/10 flex items-center justify-center">
-                  <User className="h-3.5 w-3.5 text-white" />
-                </div>
-                <span className="hidden sm:block max-w-[160px] truncate">{user.email}</span>
-              </div>
-              <button onClick={signOut} title="Esci"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white/70 hover:text-white hover:bg-white/10 transition-all">
-                <LogOut className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Esci</span>
-              </button>
-            </div>
-          )}
 
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-white leading-tight max-w-5xl mb-8">
             Soluzioni digitali concrete ed innovative
