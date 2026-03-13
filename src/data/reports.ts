@@ -64,5 +64,5 @@ export const filterTabs = [
   { label: "Finance", value: "finance" },
   { label: "Operations", value: "operations" },
   { label: "HR", value: "hr" },
-  { label: "Marketing", value: "marketing", icon: "flame" as const },
+  { label: "Marketing", value: "marketing"},
 ];
