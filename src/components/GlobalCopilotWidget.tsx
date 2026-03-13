@@ -4,7 +4,7 @@ import { Minus, X, Send, Loader2 } from "lucide-react";
 import aiAssistantAvatar from "@/assets/kpmg_df_ai_assistant.png";
 
 const N8N_WEBHOOK_URL =
-  "https://gsprst.app.n8n.cloud/webhook/cf1de04f-3e38-426c-89f0-3bdb110a5dcf/chat";
+  "https://gsprst.app.n8n.cloud/webhook/d64d1e05-43ca-45f0-a660-86fcb79d87bd/chat";
 
 // Genera un sessionId unico per questa sessione browser (lazy, dentro il componente)
 function generateSessionId() {
